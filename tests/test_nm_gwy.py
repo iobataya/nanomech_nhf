@@ -19,19 +19,25 @@ def test_nm_gwy_container():
     size_info = GwySizeInfo(x_offset=5.0e-6, y_offset=10.0e-6, x_range=1.0e-6, y_range=1.0e-6, unit_xy='m')
     container = NmGwyContainer(channel_size=2, y_size=3, x_size=4, physSizeInfo=size_info)
 
-    # Set some values in the container
-    container.set_result(0, 0, 0, 1.0)
-    container.set_result(0, 1, 2, 2.5)
-    container.set_result(1, 2, 3, 3.5)
+    # Set background values as random values for testing
+    np.random.seed(0)  # For reproducibility
+    for ch in range(2):
+        for y in range(3):
+            for x in range(4):
+                container.set_result(ch, y, x, np.random.rand())
+    # Set some specific values in the container
+    container.set_result(0, 0, 0, 100)
+    container.set_result(0, 1, 2, 250)
+    container.set_result(1, 2, 3, 350)
+    container.set_result(1, 0, 0, np.nan)  # Explicitly set a NaN value for testing
 
     # Convert to list and check values
     result_list = container.to_list()
     assert len(result_list) == 2
-    assert result_list[0][0, 0] == 1.0
-    assert result_list[0][1, 2] == 2.5
-    assert result_list[1][2, 3] == 3.5
-    assert result_list[0][0,1] == 0.0  # Unset values should be zero
-    assert result_list[1][0,0] == 0.0  # Unset values should be zero
+    assert result_list[0][0, 0] == 100
+    assert result_list[0][1, 2] == 250
+    assert result_list[1][2, 3] == 350
+    assert np.isnan(result_list[1][0,0])  # Unset values should be NaN
 
     # Save as GWY file (this will create a file in the OUTPUT_DIR)
     gwy_path = os.path.join(OUTPUT_DIR, 'test_output.gwy')

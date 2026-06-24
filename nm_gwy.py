@@ -18,8 +18,8 @@ class NmGwyContainer:
     def __init__(self, channel_size: int, y_size: int, x_size: int, physSizeInfo: GwySizeInfo) -> None:
         # Initialize a 3D array of result objects
         self.map = np.empty((channel_size, y_size, x_size), dtype=np.float64)
-        # Fill with zeroes to avoid uninitialized values
-        self.map.fill(0.0)
+        # Fill with np.nan values to avoid uninitialized values
+        self.map.fill(np.nan)
         self.physicalSize = physSizeInfo
 
     def set_result(self, channel: int, y: int, x: int, result:np.float64) -> None:
