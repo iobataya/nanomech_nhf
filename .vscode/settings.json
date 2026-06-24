@@ -1,0 +1,25 @@
+{
+  // Use Command Prompt as the default integrated terminal on Windows
+  "terminal.integrated.defaultProfile.windows": "Command Prompt",
+
+  // Ensure a Command Prompt profile is available (path to cmd.exe)
+  "terminal.integrated.profiles.windows": {
+    "PowerShell": {
+      "source": "PowerShell"
+    },
+    "Command Prompt": {
+      "path": "C:\\Windows\\System32\\cmd.exe",
+      "args": []
+    }
+  },
+
+  // Let the Python extension auto-activate the selected interpreter in terminals
+  "python.defaultInterpreterPath": "C:\\Users\\Quant\\anaconda3\\envs\\nanosurf\\python.exe",
+  "python.terminal.activateEnvironment": true,
+
+  // Basic pytest settings for the workspace
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python-envs.defaultEnvManager": "ms-python.python:conda",
+  "python-envs.defaultPackageManager": "ms-python.python:conda"
+}
