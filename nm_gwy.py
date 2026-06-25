@@ -5,8 +5,7 @@ from __future__ import annotations
 import numpy as np
 from typing import List
 import pathlib
-from nanosurf.lib.util.gwy_export import GwySizeInfo
-import nanosurf.lib.util.gwy_export as gwy_export
+from gwy_export import GwySizeInfo, savedata_gwy
 
 class NmGwyContainer:
     """Two-dimensional container of result values (np.float64).
@@ -30,7 +29,7 @@ class NmGwyContainer:
         """Return a list of 2D slices (one per channel) representing the map.
         """
         return [self.map[ch, :, :] for ch in range(self.map.shape[0])]
-    
+        
     def save_as_gwy(self, measurement_file: str | pathlib.Path, data_labels: list[str], data_units: list[str], path_prefix: str="", meta_data=None) -> str:
         """Save the container as a GWY file next to the measurement file.
 
@@ -52,14 +51,17 @@ class NmGwyContainer:
         out_path = parent / out_name
 
         data_sets = self.to_list()
+
         if meta_data is None:
             meta_data = {
             'path': str(measurement_path),
             }
 
-        gwy_export.savedata_gwy(str(out_path), 
-                                size_info=self.physicalSize, data_sets=data_sets,
+        savedata_gwy(str(out_path), 
+                                size_info=self.physicalSize,
+                                data_sets=data_sets,
                                 data_labels=data_labels,
                                 data_units=data_units,
-                                meta_data=meta_data)
+                                meta_data=meta_data,
+                                )
         return str(out_path)

@@ -14,7 +14,7 @@ class FieldMap:
         # Set Point index column as int, and set other columns as float64
         self.table = self.table.astype({"Point index": int, **{param: float for param in parameters}})
         # fill with np.nan value
-        self.table = self.table.fill(np.nan)
+        self.table = self.table.fillna(np.nan)
 
     def set_parameters_at(self, point_index:int, parameters:dict):
         """Update the parameters at a specific point index in the DataFrame.
