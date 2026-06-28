@@ -37,7 +37,7 @@ eval_coeffs = True
 ### Set FD-Analysis Parameters
 analysis_model = "Hertz"                    # Available: Hertz, Sneddon, Pyramid, DMT_Sphere, DMT_Cone
 fit_direction = "Advance"                   # Available: Advance, Retract
-tip_radius = 920e-9                         # m
+tip_radius = 5e-9                         # m
 cone_half_angle = 15                        # deg
 poisson_ratio = 0.5
 baseline_start = 0.05                       # Baseline Range (0.0 - 1.0) of Datapoints 
@@ -773,25 +773,31 @@ def fit_linear(x: np.ndarray, slope: float, offset: float) -> np.ndarray:
     return slope*x+offset
 
 def fit_hertz(x, e_eff, x0):
-    a_sphere = (4/3)/(1-poisson_ratio**2)*np.sqrt(tip_radius)*1e9
+    # Why the factor of 1e9? Because the indentation is in meters and the modulus is in Pascals, so we need to convert to nanometers for the indentation to match the units of the modulus.
+    #a_sphere = (4/3)/(1-poisson_ratio**2)*np.sqrt(tip_radius)*1e9
+    a_sphere = (4/3)/(1-poisson_ratio**2)*np.sqrt(tip_radius)
     return np.where(x > x0, a_sphere * e_eff * (x-x0)**1.5, 0)
 
 def fit_sneddon(x, e_eff, x0):
-    a_cone = (2/np.pi)/(1-poisson_ratio**2)*np.tan(np.deg2rad(cone_half_angle))*1e9
+    #a_cone = (2/np.pi)/(1-poisson_ratio**2)*np.tan(np.deg2rad(cone_half_angle))*1e9
+    a_cone = (2/np.pi)/(1-poisson_ratio**2)*np.tan(np.deg2rad(cone_half_angle))
     return np.where(x > x0, a_cone * e_eff * (x-x0)**2, 0)
 
 def fit_pyramid(x, e_eff, x0):
-    a_cone = (1/np.sqrt(2))/(1-poisson_ratio**2)*np.tan(np.deg2rad(cone_half_angle))*1e9
+    #a_cone = (1/np.sqrt(2))/(1-poisson_ratio**2)*np.tan(np.deg2rad(cone_half_angle))*1e9
+    a_cone = (1/np.sqrt(2))/(1-poisson_ratio**2)*np.tan(np.deg2rad(cone_half_angle))
     return np.where(x > x0, a_cone * e_eff * (x-x0)**2, 0)
 
 def fit_dmt_sphere(x, e_eff, x0, gamma):
-    a_sphere = (4/3)/(1-poisson_ratio**2)*np.sqrt(tip_radius)*1e9
-    a_adh = 2*np.pi*tip_radius*1e9
+    #a_sphere = (4/3)/(1-poisson_ratio**2)*np.sqrt(tip_radius)*1e9
+    a_sphere = (4/3)/(1-poisson_ratio**2)*np.sqrt(tip_radius)
+    a_adh = 2*np.pi*tip_radius
     return np.where(x > x0, a_sphere * e_eff * (x-x0)**1.5 - a_adh * gamma, 0)
 
 def fit_dmt_cone(x, e_eff, x0, gamma):
-    a_cone = 1/(1-poisson_ratio**2)*np.tan(np.deg2rad(cone_half_angle))*1e9
-    a_adh = 1e9*2*np.pi/np.tan(np.deg2rad(cone_half_angle))
+    # a_cone = 1/(1-poisson_ratio**2)*np.tan(np.deg2rad(cone_half_angle))*1e9
+    a_cone = 1/(1-poisson_ratio**2)*np.tan(np.deg2rad(cone_half_angle))
+    a_adh = 2*np.pi/np.tan(np.deg2rad(cone_half_angle))
     return np.where(x > x0, a_cone * e_eff * (x-x0)**2 - a_adh * gamma * (x-x0), 0)
 
 # Define Residuals-Functions
