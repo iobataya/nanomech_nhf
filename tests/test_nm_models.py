@@ -41,8 +41,9 @@ def _plot_fitted_curve(model:NanomechModel, x_values, y_values, fitted_params, m
     plt.grid()
     plt.tight_layout()
     ensure_output_dir()
-    filename = f'plot_{model.name}.png'
     path = os.path.join(OUTPUT_FIGS_DIR, filename)
+    #filename = f'plot_{model.name}_{int(time.time())}.png'
+    filename = f'plot_{model.name}.png'
     if os.path.exists(path):
         logger.info(f"Overwriting existing plot file: {path}")
     plt.savefig(path)
