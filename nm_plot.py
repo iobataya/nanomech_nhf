@@ -23,8 +23,10 @@ def _plot_force_spec(x1: ArrayLike, x2: ArrayLike, x3: ArrayLike,
     logger.info("Force-Spectroscopy plotted.")
     fig, ax = plt.subplots()
     ax.plot(x1, y1)
-    ax.plot(x2, y2)
-    ax.plot(x3, y3, linestyle='--')
+    if len(y2) > 0:
+        ax.plot(x2, y2)
+    if len(y3) > 0:
+        ax.plot(x3, y3, linestyle='--')
     ax.set_xlabel('Indentation (m)')
     ax.set_ylabel('Force (N)')
 
@@ -39,7 +41,8 @@ def _plot_transient(x1: ArrayLike, x2: ArrayLike, x3: ArrayLike,
     """
     fig, ax1 = plt.subplots()
     ax1.plot(x1, y1, 'b-', label='Force')
-    ax1.plot(x3, y3, 'g-', label='Force')
+    if len(y3) > 0:
+        ax1.plot(x3, y3, 'g-', label='Force')
     ax1.set_xlabel('Time (s)')
     ax1.set_ylabel('Force (N)', color='b')
     ax1.tick_params(axis='y', labelcolor='b')

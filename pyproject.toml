@@ -21,3 +21,7 @@ Repository = "https://github.com/iobataya/nanomech_nhf"
 
 [tool.setuptools]
 packages = { find = { exclude = ["tests"] } }
+
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "DEBUG"
