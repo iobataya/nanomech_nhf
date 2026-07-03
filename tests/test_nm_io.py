@@ -37,19 +37,42 @@ class TestMethods:
         logger.info(f"Advance segment channels: {list(advance_segment.channel.keys())}") 
         x = advance_segment.read_channel(Channel.Z_POSITION)
         y = advance_segment.read_channel(Channel.DEFLECTION)
-        logger.info(f"Deflection channel ({type(y)}): {y.dataset.shape}")
-        logger.info(f"Z Position channel ({type(x)}): {x.dataset.shape}")
+        time_ch = advance_segment.read_channel(Channel.TIME)
+        logger.info(f"Deflection channel ({type(y)})")
+        logger.info(f"Z Position channel ({type(x)})")
 
         name = "test_nhf_forcespec.png"
         
-        logger.debug(f"x {x.dataset[0:5], x.dataset[-5:]}, y {y.dataset[0:5], y.dataset[-5:]}")
+        #logger.debug(f"x {x.dataset[0:5], x.dataset[-5:]}, y {y.dataset[0:5], y.dataset[-5:]}")
+
+        # dataset has minimum value of float64 at the end.
+        # where do they start ? 
+        abnormal_elements = np.where(x.dataset<-1e+308)
+        logger.debug(f"abnormal : {abnormal_elements}")
+
 
         logger.debug(f"min(x,y) = {np.min(x.dataset)}, {np.min(y.dataset)}; max(x,y) = {np.max(x.dataset)}, {np.max(y.dataset)}")
-        plot_data(x, [], [], y, [], [], 'ForceSpec', None, show_plot=False)
+        logger.debug(f"x from 1560 to 1570 {x.dataset[1560:1571]}")
+        logger.debug(f"time from 1560 to 1570 {time_ch.dataset[1560:1571]}")
+
+        # find unrealistic negative value -1.79769e+308
+        # Reported CSM-726
+        neg_in_x = np.where(x.dataset < -1e+308)[0].min()
+        neg_in_y = np.where(y.dataset < -1e+308)[0].min()
+        neg_in_time = np.where(time_ch.dataset < -1e+308)[0].min()
+        logger.debug(f"neg_in_x = {neg_in_x}, neg_in_y = {neg_in_y}, neg_in_time = {neg_in_time}")
+
+        # Mask the wrong values
+        threshold = -1e+308
+        x.dataset[x.dataset < threshold] = np.nan
+        y.dataset[y.dataset < threshold] = np.nan
+        time_ch.dataset[time_ch.dataset < threshold] = np.nan
+
+
+        plt.scatter(x=x.dataset, y=y.dataset)
         path = os.path.join(OUTPUT_FIGS_DIR, name)
         plt.savefig(path)
         plt.close()
         assert os.path.exists(path)
 
         # TODO: チャンネルの最後尾にfloatの最小値が入っている。
-        
