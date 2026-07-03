@@ -5,6 +5,7 @@ loading functionality to avoid circular imports and improve modularity.
 """
 from dataclasses import dataclass
 import json
+import signal
 import numpy as np
 import pathlib
 from nanosurf.lib.util import nhf_reader
@@ -564,3 +565,110 @@ def load_nhf_file(source_file: pathlib.Path) -> NHFMeasurement:
         raise ValueError(f"Failed to enumerate measurement.segment keys for: {source_resolved}")
 
     return measurement
+
+def summary_nhf_measurement(measurement: NHFMeasurement, show_channel=True, show_segment=True, show_attribute=True) -> str:
+    """Return a summary string of the NHF measurement's channels and segments."""
+    if not measurement:
+        return "No measurement data available."
+
+    summary_lines = []
+    summary_lines.append(f"Measurement ({type(measurement)}):")
+    summary_lines.append(f"{measurement.attribute['software_name']} v{measurement.attribute['software_version']}")
+    if show_channel and measurement.channel:
+        summary_lines.append(f"# channel  {list(measurement.channel.keys())}")
+        for ch_name, channel in measurement.channel.items():
+            #nhf_dataset = measurement.read_channel(ch_name)
+            summary_lines.append(summary_nhf_dataset(channel, label=ch_name, show_attributes=show_attribute))
+
+    if show_segment and measurement.segment:
+        summary_lines.append(f"# segment: {list(measurement.segment.keys())}")
+        for seg_name, segment in measurement.segment.items():
+            summary_lines.append(summary_nhf_segment(segment, label=seg_name, show_attribute=show_attribute))
+
+    if show_attribute and hasattr(measurement, 'attribute'):
+        for attr_name, attr_value in measurement.attribute.items():
+            summary_lines.append(f"Attribute: {attr_name} = {attr_value}")
+
+    return "\n".join(summary_lines)
+
+def summary_nhf_segment(segment: NHFSegment, label='NHFSegment', indent_str='    ', show_attribute=False) -> str:
+    """Return a summary string of the NHF segment's properties."""
+    if not segment:
+        return "No segment available."
+    ss = indent_str
+    summary_lines = []
+    summary_lines.append(f'{ss} {label} ({type(segment)}):')
+    summary_lines.append(f"{ss}{ss}Channels: {list(segment.channel.keys())}")
+    for ch_name, channel in segment.channel.items():
+        nhf_dataset = segment.read_channel(ch_name)
+        summary_lines.append(summary_nhf_dataset(nhf_dataset, label=ch_name, indent_str=ss*3, show_attributes=show_attribute))
+    if show_attribute and hasattr(segment, 'attribute'):
+        summary_lines.append(f"{ss}{ss}Attributes: {list(segment.attribute.keys())}")
+
+    return "\n".join(summary_lines)
+
+def summary_nhf_dataset(dataset: NHFDataset, label='NHFDataset',indent_str='    ', show_attributes=False) -> str:
+    """Return a summary string of the NHF dataset's properties."""
+    if not dataset:
+        return "No dataset available."
+    ss = indent_str
+    summary_lines = []
+    summary_lines.append(f'{ss} {label} ({type(dataset)}):')
+    summary_lines.append(f"{ss}{ss}Dataset: ({type(dataset)}): {dataset.name}, shape: {dataset.dataset.shape}, unit: {dataset.unit}")
+    if show_attributes and hasattr(dataset, 'attribute'):
+        for attr_name, attr_value in dataset.attribute.items():
+            summary_lines.append(f"{ss}{ss}Attribute: {attr_name} = {attr_value}")
+
+    return "\n".join(summary_lines)
+
+def coordinate_to_XY_index(measurement:NHFMeasurement, x, y) -> int:
+    """Convert (x,y) coordinates to point index in a rectangular force map.
+    Returns -1 if the measurement is not mapping, but single force curve.
+
+    The mapping assumes a serpentine scan pattern starting from the top-left corner.
+    """
+    if measurement is None:
+        raise ValueError("Measurement is None. Cannot convert coordinates to index.")
+    first_dataset = _get_first_dataset(measurement)
+    if first_dataset is None:
+        raise ValueError("Measurement does not contain any datasets. Cannot convert coordinates to index.")
+    if _is_single_point(measurement):
+        return -1  # Not a map, single point measurement
+    data_pattern = first_dataset.attribute.get('signal_data_pattern',None)
+    if data_pattern is None:
+        raise ValueError("Measurement does not have a valid signal_data_pattern attribute.")
+    if data_pattern != 'snake_bottom_left':
+        raise ValueError(f"Unsupported signal_data_pattern '{data_pattern}'. Only 'snake_bottom_left' is supported.")
+
+    points_x = measurement.attribute.get('rect_axis_size', [None, None])[0]
+    points_y = measurement.attribute.get('rect_axis_size', [None, None])[1]
+    if points_x is None or points_y is None:
+        raise ValueError("Measurement does not have valid rect_axis_size attributes.")
+
+    if x < 0 or x >= points_x or y < 0 or y >= points_y:
+        raise ValueError(f"Coordinates (x={x}, y={y}) are out of bounds for map size ({points_x}, {points_y}).")
+
+    # point starts from bottom-left corner.
+    dY = y
+    if dY % 2 == 0:  # even row -> left to right
+        point_index = dY * points_x + x
+    else:  # odd row -> right to left
+        point_index = dY * points_x + (points_x - 1 - x)
+    return point_index
+
+def _is_single_point(measurement: NHFMeasurement) -> bool:
+    """Determine if the measurement is a single-point force curve (not a map)."""
+    points_x = measurement.attribute.get('rect_axis_size', [None, None])[0]
+    points_y = measurement.attribute.get('rect_axis_size', [None, None])[1]
+    return points_x == 1 and points_y == 1
+
+def _get_first_dataset(measurement: NHFMeasurement) -> NHFDataset | None:
+    """Return the first dataset found in the measurement's channels, or None if none exist."""
+    if not measurement or not measurement.channel:
+        return None
+    segment = next(iter(measurement.segment.values()), None)
+    if segment is not None:
+        ch = next(iter(segment.channel.values()), None)
+        if ch is not None and hasattr(ch, 'dataset'):
+            return ch
+    return None
