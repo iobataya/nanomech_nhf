@@ -479,8 +479,6 @@ def get_offset_datapoints(segment: NHFSegment, channel: NHFDataset):
 
     return offset, datapoints
 
-
-
 def convert_deflection_to_meters(ch_defl: NHFDataset, measurement: NHFMeasurement, deflection_sensitivity: float | None = None, spring_constant: float | None = None):
     """ Convert deflection channel to meters using sensitivity and spring constant."""
     ds = deflection_sensitivity
@@ -539,6 +537,7 @@ def load_nhf_file(source_file: pathlib.Path) -> NHFMeasurement:
 
     try:
         nhf_file = nhf_reader.NHFFileReader(source_resolved, verbose=False)
+        logger.debug(f"NHF file '{source_resolved}' opened successfully. str(nhf_file):\n{nhf_file}")
     except Exception as e:
         raise ValueError(f"Failed to open NHF file '{source_resolved}': {e}") from e
 
@@ -559,7 +558,7 @@ def load_nhf_file(source_file: pathlib.Path) -> NHFMeasurement:
     # Log available segments for debugging when files differ between systems
     try:
         seg_names = list(measurement.segment.keys())
-        logger.debug(f"Segments available: {seg_names}")
+        logger.debug(f"{measurement_name}: Segments available: {seg_names}")
     except Exception:
         logger.debug(f"Could not enumerate measurement.segment keys; segment object repr: {measurement!r}")
         raise ValueError(f"Failed to enumerate measurement.segment keys for: {source_resolved}")
@@ -629,10 +628,10 @@ def coordinate_to_XY_index(measurement:NHFMeasurement, x, y) -> int:
     """
     if measurement is None:
         raise ValueError("Measurement is None. Cannot convert coordinates to index.")
-    first_dataset = _get_first_dataset(measurement)
+    first_dataset = get_first_dataset(measurement)
     if first_dataset is None:
         raise ValueError("Measurement does not contain any datasets. Cannot convert coordinates to index.")
-    if _is_single_point(measurement):
+    if is_single_point(measurement):
         return -1  # Not a map, single point measurement
     data_pattern = first_dataset.attribute.get('signal_data_pattern',None)
     if data_pattern is None:
@@ -656,13 +655,13 @@ def coordinate_to_XY_index(measurement:NHFMeasurement, x, y) -> int:
         point_index = dY * points_x + (points_x - 1 - x)
     return point_index
 
-def _is_single_point(measurement: NHFMeasurement) -> bool:
+def is_single_point(measurement: NHFMeasurement) -> bool:
     """Determine if the measurement is a single-point force curve (not a map)."""
     points_x = measurement.attribute.get('rect_axis_size', [None, None])[0]
     points_y = measurement.attribute.get('rect_axis_size', [None, None])[1]
-    return points_x == 1 and points_y == 1
+    return int(points_x) == 1 and int(points_y) == 1
 
-def _get_first_dataset(measurement: NHFMeasurement) -> NHFDataset | None:
+def get_first_dataset(measurement: NHFMeasurement) -> NHFDataset | None:
     """Return the first dataset found in the measurement's channels, or None if none exist."""
     if not measurement or not measurement.channel:
         return None
@@ -672,3 +671,41 @@ def _get_first_dataset(measurement: NHFMeasurement) -> NHFDataset | None:
         if ch is not None and hasattr(ch, 'dataset'):
             return ch
     return None
+
+def get_dataset(measurement: NHFMeasurement, point_index:int, seg_name:str, ch_name:str, mask_nan:bool=True):
+    """Return the dataset for a given point index, segment name, and channel name."""
+    if measurement is None:
+        raise ValueError("Measurement is None. Cannot retrieve dataset.")
+    if seg_name not in measurement.segment:
+        raise ValueError(f"Segment '{seg_name}' not found in measurement.")
+    segment = measurement.segment[seg_name]
+    if ch_name not in segment.channel:
+        raise ValueError(f"Channel '{ch_name}' not found in segment '{seg_name}'.")
+    channel = segment.read_channel(ch_name)
+    offset, datapoints = get_offset_datapoints(segment, channel)
+    start_index = int(offset[point_index])
+    data_count = int(datapoints[point_index])
+    dataset = channel.dataset[start_index:start_index + data_count]
+    if mask_nan:
+        dataset = np.where(dataset < -1e+308, np.nan, dataset)
+    return dataset
+
+def get_data_at_all_point(measurement:NHFMeasurement, seg_name:str, ch_name:str):
+    """Return a list of datasets for all points in the measurement for a given segment and channel."""
+    if measurement is None:
+        raise ValueError("Measurement is None. Cannot retrieve datasets.")
+    if seg_name not in measurement.segment:
+        raise ValueError(f"Segment '{seg_name}' not found in measurement.")
+    segment = measurement.segment[seg_name]
+    if ch_name not in segment.channel:
+        raise ValueError(f"Channel '{ch_name}' not found in segment '{seg_name}'.")
+    channel = segment.read_channel(ch_name)
+    offset, datapoints = get_offset_datapoints(segment, channel)
+    all_datasets = []
+    for point_index in range(len(offset)):
+        start_index = int(offset[point_index])
+        data_count = int(datapoints[point_index])
+        dataset = channel.dataset[start_index:start_index + data_count]
+        dataset = np.where(dataset < -1e+308, np.nan, dataset)  # Mask invalid values
+        all_datasets.append(dataset)
+    return all_datasets
