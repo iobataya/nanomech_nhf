@@ -7,15 +7,16 @@ from dataclasses import dataclass
 import json
 import signal
 import numpy as np
-import pathlib
-from nanosurf.lib.util import nhf_reader
+from nanosurf.lib.util import nhf_reader, nid_reader
 from typing import TypeAlias
 from enum import IntEnum
 import math
-
+from pathlib import Path
 import logging
 logger = logging.getLogger(__name__)
 
+NHFReader: TypeAlias = nhf_reader.NHFFileReader
+NIDReader: TypeAlias = nid_reader.NIDFileReader
 NHFDataset: TypeAlias = nhf_reader.NHFDataset
 NHFSegment: TypeAlias = nhf_reader.NHFSegment
 NHFMeasurement: TypeAlias = nhf_reader.NHFMeasurement
@@ -69,6 +70,26 @@ class SweepDirection(IntEnum):
     ASCENDING = 0
     DESCENDING = 1
 
+class NSF_Measurement:
+    def __init__(self, path:Path):
+        if path.suffix.lower() == '.nhf':
+            self.reader = nhf_reader.NHFFileReader(path)
+            if self.reader.measurement_count() > 0:
+                logger.debug(f"NSF_Measurement initialized with NHFReader containing {self.reader.measurement_name(0)}.")
+            else:
+                raise ValueError("NHFReader does not contain any measurements.")
+        elif path.suffix.lower()  == '.nid':
+            self.reader = nid_reader.NIDFileReader(path)
+            if self.reader.header:
+                logger.debug(f"NSF_Measurement initialized with NIDReader containing {len(self.reader.data)} measurements.")
+            else:
+                raise ValueError("NIDReader does not contain valid header information.")
+        else:
+            raise TypeError("NSF_Measurement constructor requires an NHFReader or NIDReader instance.")
+
+    @property
+    def is_nhf(self) -> bool:
+        return isinstance(self.reader, NHFReader)
 
 @dataclass
 class Measurement_Info:
@@ -231,7 +252,7 @@ class VeaForceMapData:
         datasets: dictionary of NHFDataset objects accessible by [Channel][Segment]
         current_point: int - current point index being processed
     """
-    def __init__(self, source_file: pathlib.Path):
+    def __init__(self, source_file: Path):
         self.nhf_measurement = load_nhf_file(source_file)
         if self.nhf_measurement is None:
             raise ValueError(f"Failed to load measurement file: {source_file}")
@@ -516,7 +537,7 @@ def find_frequency_changes(data: VeaMeasurementData, point:int):
     #logger.debug(f"change_indices: {corr_change_indices}, val: {data.ch_meta_vea.dataset[corr_change_indices + start_index]}")
     return corr_change_indices
 
-def load_nhf_file(source_file: pathlib.Path) -> NHFMeasurement:
+def load_nhf_file(source_file: Path) -> NHFMeasurement:
     """Load an NHF file and return the first measurement instance.
 
     This function is defensive: it validates the input path, converts to a
@@ -526,7 +547,7 @@ def load_nhf_file(source_file: pathlib.Path) -> NHFMeasurement:
     if not source_file:
         raise ValueError("No source_file provided to load_nhf_file")
 
-    source = pathlib.Path(source_file)
+    source = Path(source_file)
     try:
         source_resolved = source.resolve()
     except Exception:
