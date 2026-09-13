@@ -9,7 +9,7 @@ description = "Nanomechanical anaylses"
 authors = [{ name = "Ikuo Obataya", email = "obataya@qd-japan.com" }]
 license = {text = "MIT License"}
 readme = "README.md"
-keywords = ["nanosurf", "elasticanalyais", "viscoelasticanalyais", "afm","spm",]
+keywords = ["nanosurf", "forcespectroscopy", "elasticanalyais", "viscoelasticanalyais", "afm", "spm",]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Programming Language :: Python"

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import json
 import signal
 import numpy as np
-from nanosurf.lib.util import nhf_reader, nid_reader
+from nanosurf.utils.io import nhf_reader, nid_reader
 from typing import TypeAlias
 from enum import IntEnum
 import math
