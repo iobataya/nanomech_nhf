@@ -49,7 +49,16 @@ def fit_excitation(frequencies, amplitudes) -> ExcitationFitResult:
                                float(np.linalg.norm(residual)), tuple(f), tuple(normalized), solver)
 
 
-def demodulate_amplitudes(time, signal, frequencies, boundaries):
+@dataclass(frozen=True)
+class SineFitResult:
+    amplitude: float
+    frequency_hz: float
+    phase_rad: float
+    dc: float
+    residual_norm: float
+
+
+def demodulate_signal(time, signal, frequencies, boundaries):
     """Legacy sine fit on the central 40%, with phase convention phi-1."""
     time, signal = np.asarray(time), np.asarray(signal)
     bounds = np.asarray(boundaries)
@@ -77,5 +86,11 @@ def demodulate_amplitudes(time, signal, frequencies, boundaries):
         )
         if not result.success or not np.all(np.isfinite(result.x)):
             raise ValueError(f"Sine fit failed at {f} Hz: {result.message}")
-        amplitudes.append(result.x[0])
-    return np.asarray(amplitudes)
+        amplitudes.append(SineFitResult(*map(float, result.x), float(np.linalg.norm(result.fun))))
+    phases = np.unwrap([fit.phase_rad for fit in amplitudes])
+    return tuple(SineFitResult(fit.amplitude, fit.frequency_hz, float(phase), fit.dc, fit.residual_norm)
+                 for fit, phase in zip(amplitudes, phases))
+
+
+def demodulate_amplitudes(time, signal, frequencies, boundaries):
+    return np.asarray([fit.amplitude for fit in demodulate_signal(time, signal, frequencies, boundaries)])

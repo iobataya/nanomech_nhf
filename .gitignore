@@ -1,5 +1,7 @@
 # Ignore large test-data in test-data-large
 test-data-large/
+.last_calibration.nhf
+.last_calibration.*.tmp
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

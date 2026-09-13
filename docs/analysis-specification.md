@@ -106,7 +106,7 @@ python main.py excitation-fit --config excitation.toml
 `max_count` とする。以下の `max_points` は同じ意味の互換名として扱う。
 CLIは `--max_count` / `--max-count` と旧名2表記を受け付ける。
 configで両名を同時指定した場合はエラーとする。
-現段階では `vea --dry-run` でメタデータのみを読み、対象点を確認できる。
+現段階では `vea --dry-run` でsampleのメタデータから対象点を選択し、calibrationのフィッティングまで実行する。
 VEAの数値計算・未処理結果のゼロ埋めは後続の実装対象。
 
 確認済み要件（2026-09-13）:
@@ -139,6 +139,13 @@ VEAの範囲指定の確定仕様:
 - 選択処理は共通の機能として切り出し、CLIとGUIが同じ点集合を生成する。
 
 VEAのcalibrationの確定仕様:
+
+- `--calibration` を明示した場合は必ずそのファイルを読み込む。不存在・読み込み失敗時にキャッシュへフォールバックしない。
+- 省略時は実行スクリプト `main.py` と同じディレクトリの `.last_calibration.nhf` を使用する。カレントディレクトリには依存しない。キャッシュもなければ例外をraiseする。
+- 明示ファイルを正常に読み込み検証した後、NHF本体を `.last_calibration.nhf` にコピーして次回用に保存する。コピー失敗時は以前のキャッシュを保持する。
+- 採用したcalibrationの絶対パスと由来（CLI／cache）をDEBUGログに記録する。
+- 現在の `--dry-run` でもこの選択・メタデータ検証・キャッシュ保存を行う。キャッシュ保存はメタデータ検証後であり、その後のフィット成功を保証するものではない。
+- `--dry-run` はsample点の解析を省略するが、準備処理として校正値の解決とcalibration点0の周波数別フィッティングを実行する。Deflection、Indentation、Position Zの振幅・フィット周波数・位相・DC・残差ノルムをINFOログに出力する。sampleの波形は読み込まない。
 
 - 少なくとも1つのmeasurementを持ち、その先頭measurementに少なくとも1点のデータが保存されていることを前提とする。
 - measurement index=0の測定点index=0のみを使用する。複数measurement・複数点があっても他のデータは使用しない。

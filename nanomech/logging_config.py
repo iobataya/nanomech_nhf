@@ -9,3 +9,5 @@ def configure_logging(level="INFO"):
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
     logging.getLogger().setLevel(level)
+    # Keep application DEBUG useful while retaining font warnings and errors.
+    logging.getLogger("matplotlib.font_manager").setLevel(logging.WARNING)

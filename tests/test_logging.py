@@ -11,7 +11,9 @@ from nanomech.selection import select_points
 
 
 @pytest.fixture(autouse=True)
-def restore_root_level():
+def restore_root_level(monkeypatch):
+    monkeypatch.setattr("nanomech.vea_command.load_calibration", lambda path: None)
+    monkeypatch.setattr("nanomech.vea_command.prepare_calibration", lambda *a, **k: None)
     level = logging.getLogger().level
     yield
     logging.getLogger().setLevel(level)
