@@ -7,6 +7,8 @@ import datetime as datetime
 from dataclasses import dataclass
 import numpy as np
 import struct
+import logging
+logger = logging.getLogger(__name__)
 import pathlib
 
 @dataclass
@@ -96,7 +98,7 @@ class GwyFile:
             gwy_file.close()
             done = True
         except Exception as e:
-            print(e)
+            logger.info(e)
             done = False
         return done
 
@@ -187,7 +189,7 @@ def savedata_gwy(gwy_file_path:pathlib.Path, size_info:GwySizeInfo, data_sets:li
             
         done = gwy_file.save()  
     except Exception as e:
-        print(e)
+        logger.info(e)
         done = False
     return done
 

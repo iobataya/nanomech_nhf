@@ -4,8 +4,12 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 import json
 from pathlib import Path
-import sys
+import logging
 from uuid import uuid4
+from .logging_config import configure_logging
+from . import vea_command
+
+logger = logging.getLogger(__name__)
 
 
 def excitation_parser(parser):
@@ -39,15 +43,21 @@ def excitation_execute(args):
     (run / "run.json").write_text(json.dumps(metadata, indent=2, allow_nan=False), encoding="utf-8")
     (run / "excitation_coefficients.json").write_text(
         json.dumps(dict(zip((f"c{i}" for i in range(6)), result.coefficients)), indent=2, allow_nan=False), encoding="utf-8")
-    print(run)
+    logger.info("%s", run)
     return 0
 
 
-COMMANDS = (("excitation-fit", "Fit excitation coefficients from NHF point zero", excitation_parser, excitation_execute),)
+COMMANDS = (
+    ("excitation-fit", "Fit excitation coefficients from NHF point zero", excitation_parser, excitation_execute),
+    ("vea", "Preview VEA sample point selection", vea_command.configure_parser, vea_command.execute),
+)
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
+    log_options = dict(type=str.upper, choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"),
+                       help="Console log level (default: INFO)")
+    parser.add_argument("--log-level", "--log_level", default="INFO", **log_options)
     subparsers = parser.add_subparsers(required=True)
     names = set()
     for name, summary, configure, execute in COMMANDS:
@@ -55,11 +65,13 @@ def main(argv=None):
             raise ValueError(f"Duplicate command: {name}")
         names.add(name)
         child = subparsers.add_parser(name, help=summary)
+        child.add_argument("--log-level", "--log_level", default=argparse.SUPPRESS, **log_options)
         configure(child)
         child.set_defaults(handler=execute)
     args = parser.parse_args(argv)
+    configure_logging(args.log_level)
     try:
         return args.handler(args)
     except (ValueError, OSError, KeyError, TypeError, RuntimeError) as error:
-        print(f"error: {error}", file=sys.stderr)
+        logger.info("error: %s", error)
         return 1

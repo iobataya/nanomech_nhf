@@ -19,6 +19,7 @@ import sys
 import json
 import math
 import logging
+logger = logging.getLogger(__name__)
 
 import matplotlib.pyplot as plt
 #from nanosurf.lib.util import nhf_reader, fileutil, gwy_export
@@ -172,7 +173,7 @@ def compare_datasets():
     properties = ["start_frequency","end_frequency","frequency_datapoints","sweep_type","sweep_direction","sines_number","sines_pnts"]
     for prop in properties:
         if reference_data.vea_configuration["property"][prop] != sample_data.vea_configuration["property"][prop]:
-            print("Error: '{type}' mismatch between Calibration and Sample Measurement")
+            logger.info("Error: '{type}' mismatch between Calibration and Sample Measurement")
             return False
     return True
 
@@ -184,7 +185,7 @@ def get_offset_datapoints(segment: nhf_reader.NHFSegment, channel: nhf_reader.NH
         ch_datapoints = segment.read_channel('number_of_datapoints_acquired')
         datapoints = ch_datapoints.dataset
     except Exception as e:
-        print(f"No offset and datapoint channel found. Probably used Nanosurf Studio Version 9 or higher: {e}") 
+        logger.info(f"No offset and datapoint channel found. Probably used Nanosurf Studio Version 9 or higher: {e}")
         try:
             block_size_id = channel.attribute["dataset_block_size_source"]
             datap = segment.find_dataset_by_attribute_value("dataset_block_size_id", block_size_id)
@@ -193,7 +194,7 @@ def get_offset_datapoints(segment: nhf_reader.NHFSegment, channel: nhf_reader.NH
             datapoints = np.diff(offset)
             
         except Exception as e:
-            print(f"Warning: No data with number of acquired datapoints found: {e}")
+            logger.info(f"Warning: No data with number of acquired datapoints found: {e}")
     return offset, datapoints
 
 # Returns all Deflection Values in m
@@ -210,7 +211,7 @@ def fix_deflection_unit(ch_defl: nhf_reader.NHFDataset, measurement: nhf_reader.
         ch_defl.dataset /= (measurement.attribute['spm_probe_calibration_deflection_sensitivity'] * measurement.attribute['spm_probe_calibration_spring_constant'])
         ch_defl.dataset *= deflection_sensitivity
     else:
-        print(f"{ch_defl.name} unit unknown and not transformed.")
+        logger.info(f"{ch_defl.name} unit unknown and not transformed.")
 
 # Detect changes in Excitation Frequency from Meta-Data
 def find_frequency_changes(data: Measurement_Data, point):
@@ -259,8 +260,8 @@ def import_data(source_file: pathlib.Path, type) -> bool:
     ### Define Type of Data
     if type == "Measurement":
         data = sample_data
-        print(f"Deflection Sensitivity = {deflection_sensitivity} m/V")
-        print(f"Spring Constant = {spring_constant} N/m")
+        logger.info(f"Deflection Sensitivity = {deflection_sensitivity} m/V")
+        logger.info(f"Spring Constant = {spring_constant} N/m")
 
         sample_info.deflection_sensitivity = deflection_sensitivity
         sample_info.spring_constant = spring_constant
@@ -343,7 +344,7 @@ def import_data(source_file: pathlib.Path, type) -> bool:
 def plot_data(x1data, x2data, x3data, y1data, y2data, y3data, plot_type, info):
     
     if plot_type == "ForceSpec":
-        print("Force-Spectroscopy:")
+        logger.info("Force-Spectroscopy:")
         fig1, ax1 = plt.subplots()
         ax1.plot(x1data, y1data)
         ax1.plot(x2data, y2data)
@@ -352,7 +353,7 @@ def plot_data(x1data, x2data, x3data, y1data, y2data, y3data, plot_type, info):
         ax1.set_ylabel('Force (N)')
 
     elif plot_type == "Transient":
-        print(f"VEA Transient at {info} Hz")
+        logger.info(f"VEA Transient at {info} Hz")
         fig1, ax1 = plt.subplots()
         ax1.plot(x1data, y1data, 'b-', label='Force')
         ax1.plot(x3data, y3data, 'g-', label='Force')
@@ -365,7 +366,7 @@ def plot_data(x1data, x2data, x3data, y1data, y2data, y3data, plot_type, info):
         ax2.tick_params(axis='y', labelcolor='r')
 
     elif plot_type == "Moduli":
-        print("VEA Elastic Moduli:")
+        logger.info("VEA Elastic Moduli:")
         fig1, ax1 = plt.subplots()
         ax1.plot(x1data, y1data, 'b-', label='Storage')
         ax1.set_xlabel('Frequency (Hz)')
@@ -376,7 +377,7 @@ def plot_data(x1data, x2data, x3data, y1data, y2data, y3data, plot_type, info):
         ax1.plot(x1data, y2data, 'r-', label='Loss')
 
     elif plot_type == "Moduli_Tangent":
-        print("VEA Elastic Moduli:")
+        logger.info("VEA Elastic Moduli:")
         fig1, ax1 = plt.subplots()
         ax1.plot(x1data, y1data, 'b-', label='Storage')
         ax1.plot(x1data, y3data, 'b--', label='Loss')
@@ -622,10 +623,10 @@ def evaluate_moduli(point):
         using_cleandrive = False
     
     if using_cleandrive:
-        print("Using CleanDrive Excitation Method")
+        logger.info("Using CleanDrive Excitation Method")
         G_complex_shear = factor * ( (reference_deflection_complex/sample_deflection_complex) - 1)
     else:
-        print("Using Piezo Excitation Method")
+        logger.info("Using Piezo Excitation Method")
         G_complex_shear = factor * sample_response_complex
 
     E_complex_elastic = 2 * G_complex_shear * (1 + poisson_ratio)
@@ -637,7 +638,7 @@ def evaluate_moduli(point):
         if point <= 10:
             plot_data(frequencies, None, None, vea_results.list_modulus_storage, vea_results.list_loss_tangent, vea_results.list_modulus_loss, "Moduli_Tangent", "")
         else:
-            print("Skipping Plots for this Points > 10 to save time.")
+            logger.info("Skipping Plots for this Points > 10 to save time.")
     
     return True
 
@@ -718,22 +719,22 @@ def eval_coeffs_func():
                 param_errors = [0] * num_coeffs
             
             # Print detailed fitting results
-            print(f"High-precision polynomial fitting results (order {polynomial_order}, log10(frequency), normalized amplitudes):")
+            logger.info(f"High-precision polynomial fitting results (order {polynomial_order}, log10(frequency), normalized amplitudes):")
             for i, (coeff, error) in enumerate(zip(fitted_coeffs, param_errors)):
-                print(f"c{i} = {coeff:.8e} ± {error:.2e}")
-            print(f"Polynomial: amp = c0 + c1*log10(f) + c2*log10(f)^2 + ... + c{polynomial_order}*log10(f)^{polynomial_order}")
-            print(f"Residual norm: {np.linalg.norm(result.fun):.2e}")
-            print(f"Function evaluations: {result.nfev}")
-            print(f"Amplitude normalization factor = {amp_max:.6e}")
+                logger.info(f"c{i} = {coeff:.8e} ± {error:.2e}")
+            logger.info(f"Polynomial: amp = c0 + c1*log10(f) + c2*log10(f)^2 + ... + c{polynomial_order}*log10(f)^{polynomial_order}")
+            logger.info(f"Residual norm: {np.linalg.norm(result.fun):.2e}")
+            logger.info(f"Function evaluations: {result.nfev}")
+            logger.info(f"Amplitude normalization factor = {amp_max:.6e}")
         else:
-            print(f"High-precision fit failed: {result.message}")
+            logger.info(f"High-precision fit failed: {result.message}")
             # Fallback to standard curve_fit
             popt, pcov = opt.curve_fit(fit_amplitude, reference_demod.list_frequency, normalized_amp, p0=p0, bounds=bounds, maxfev=5000)
             fitted_coeffs = popt
-            print(f"Fallback polynomial fitting results (order {polynomial_order}, log10(frequency)):")
+            logger.info(f"Fallback polynomial fitting results (order {polynomial_order}, log10(frequency)):")
             for i, coeff in enumerate(fitted_coeffs):
-                print(f"c{i} = {coeff:.6e}")
-            print(f"Polynomial: amp = c0 + c1*log10(f) + c2*log10(f)^2 + ... + c{polynomial_order}*log10(f)^{polynomial_order}")
+                logger.info(f"c{i} = {coeff:.6e}")
+            logger.info(f"Polynomial: amp = c0 + c1*log10(f) + c2*log10(f)^2 + ... + c{polynomial_order}*log10(f)^{polynomial_order}")
         
         # Generate fitted curve for plotting
         freq_fit = np.logspace(np.log10(np.min(reference_demod.list_frequency)), 
@@ -742,11 +743,11 @@ def eval_coeffs_func():
         amp_fit = amp_fit_normalized * amp_max  # Scale back for plotting
         
     except Exception as e:
-        print(f"Error in fitting: {e}")
+        logger.info(f"Error in fitting: {e}")
         freq_fit = None
         amp_fit = None
     
-    print("VEA Elastic Moduli (Polynomial Fit on Log10 Frequency Scale):")
+    logger.info("VEA Elastic Moduli (Polynomial Fit on Log10 Frequency Scale):")
     fig1, ax1 = plt.subplots()
     ax1.plot(reference_demod.list_frequency, reference_demod.list_deflection_amp, 'b-', label='Amp Data')
     
@@ -876,7 +877,7 @@ def evaluate_spec(point):
         tilt = fit_linear(z_position_retract, *popt_baseline_fit)
         deflection_retract = deflection_retract - tilt
     except Exception as e:
-        print(f"Error: Baseline Correction Failed: {e}")
+        logger.info(f"Error: Baseline Correction Failed: {e}")
         return False
     
     # Create Indentation & Force...
@@ -926,7 +927,7 @@ def evaluate_spec(point):
             result = opt.least_squares(fit_func, p0, bounds=bounds, args=(indentation_retract, force_retract*1e9), gtol=2.23e-16, xtol=2.23e-16)
         popt = result.x
     except Exception as e:
-        print(f"Error: FD Fitting Failed: {e}")
+        logger.info(f"Error: FD Fitting Failed: {e}")
         return False
     
     vea_results.static_modulus = popt[0]
@@ -943,8 +944,8 @@ def evaluate_spec(point):
     sample_data.calc_indentation_vea -= popt[1]
     sample_data.calc_indentation_retract -= popt[1]
 
-    print(f"Elastic Modulus = {popt[0]/1e6} MPa")
-    print(f"Contact Point = {popt[1]} m")
+    logger.info(f"Elastic Modulus = {popt[0]/1e6} MPa")
+    logger.info(f"Contact Point = {popt[1]} m")
 
     if plot_spec:
         if point < 10:
@@ -994,7 +995,7 @@ if __name__ == "__main__":
         for point in range(sample_info.points_x * sample_info.points_y):
 
             # Evaluate Force-Distance Curve
-            print(point)
+            logger.info(point)
             done = evaluate_spec(point)
             if not done:
                 sys.exit("Error: Failed to analyse Static Forc-Spectroscopy Curve")
@@ -1075,4 +1076,4 @@ if __name__ == "__main__":
     except Exception:
         logging.exception("Legacy VEA analysis failed")
         sys.exit(1)
-    print("AnalysisDone :)")
+    logger.info("AnalysisDone :)")

@@ -102,6 +102,13 @@ python main.py excitation-fit --config excitation.toml
 
 ### measurementと対象点の選択
 
+2026-09-13 実装時の名称更新: ユーザー指定に従い点数上限の正式名は
+`max_count` とする。以下の `max_points` は同じ意味の互換名として扱う。
+CLIは `--max_count` / `--max-count` と旧名2表記を受け付ける。
+configで両名を同時指定した場合はエラーとする。
+現段階では `vea --dry-run` でメタデータのみを読み、対象点を確認できる。
+VEAの数値計算・未処理結果のゼロ埋めは後続の実装対象。
+
 確認済み要件（2026-09-13）:
 
 - 各NHFファイルで扱うmeasurementは先頭のindex=0のみ。measurement indexとその内部の測定点indexは区別する。
