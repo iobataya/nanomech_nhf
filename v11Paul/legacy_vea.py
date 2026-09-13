@@ -21,7 +21,8 @@ import math
 import logging
 
 import matplotlib.pyplot as plt
-from nanosurf.lib.util import nhf_reader, fileutil, gwy_export
+#from nanosurf.lib.util import nhf_reader, fileutil, gwy_export
+from nanosurf.utils.io import nhf_reader, nid_reader, fileutil, gwy_export
 import scipy.optimize as opt
 from scipy.signal import butter, filtfilt, savgol_filter
 

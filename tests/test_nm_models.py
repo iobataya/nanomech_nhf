@@ -6,7 +6,7 @@ import scipy.optimize as opt
 import matplotlib.pyplot as plt
 import time
 
-from nanosurf.lib.util import nhf_reader, fileutil
+from nanosurf.utils.io import nhf_reader, fileutil
 
 
 # Ensure repository root is on sys.path for imports
@@ -97,7 +97,7 @@ class TestNanomechModels:
         assert np.allclose(fitted_params, [0.1, 1e9], rtol=0.05)  # Allow some tolerance due to noise
 
 class TestLinearModel:
-    def test_linear_model():
+    def test_linear_model(self):
         # Create a Linear model with specific parameters
         slope = 100
         intercept = 1e9
