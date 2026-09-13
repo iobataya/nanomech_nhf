@@ -58,8 +58,12 @@ class SineFitResult:
     residual_norm: float
 
 
-def demodulate_signal(time, signal, frequencies, boundaries):
-    """Legacy sine fit on the central 40%, with phase convention phi-1."""
+def demodulate_signal(time, signal, frequencies, boundaries, *, normalize=True):
+    """Central 40% sine fit; returned phase retains the legacy phi-1 convention.
+
+    Calibration and sample VEA use normalized FixedDriftSine. The unnormalized
+    branch is retained only for the separately specified legacy excitation fit.
+    """
     time, signal = np.asarray(time), np.asarray(signal)
     bounds = np.asarray(boundaries)
     if time.ndim != 1 or signal.shape != time.shape or not np.all(np.isfinite(time)) or not np.all(np.isfinite(signal)):
@@ -79,6 +83,23 @@ def demodulate_signal(time, signal, frequencies, boundaries):
             raise ValueError("Sine fit requires at least five distinct, nondecreasing timestamps")
         initial = [(y.max() - y.min()) / 2, f, .9*np.pi, (y.max() + y.min()) / 2]
         tf, yf = t[margin:len(t)-margin], y[margin:len(y)-margin]
+        if normalize:
+            from nm_models import FixedDriftSine
+            scale = initial[0]
+            if scale <= 0:
+                raise ValueError(f"No oscillation amplitude at {f} Hz")
+            model = FixedDriftSine(scale)
+            model.param_scales = np.array([scale, f, 1., max(abs(initial[3]), scale)])
+            model.parameters["init"] = [initial[0], f, initial[2]-1, initial[3]]
+            params = model.fit(tf, yf,
+                bounds=([0, .999*f, -1, -np.inf], [np.inf, 1.001*f, 2*np.pi-1, np.inf]),
+                ftol=1e-12, xtol=1e-12, gtol=1e-12)
+            result = model.last_results["raw_result"]
+            if not result.success or not np.all(np.isfinite(params)):
+                raise ValueError(f"Sine fit failed at {f} Hz: {result.message}")
+            amplitudes.append(SineFitResult(float(params[0]), float(params[1]), float(params[2]+1),
+                float(params[3]), float(np.linalg.norm(result.fun)*scale)))
+            continue
         result = optimize.least_squares(
             lambda p: yf - (p[0]*np.sin(2*np.pi*tf*p[1]+p[2]-1)+p[3]), initial,
             bounds=([0, .999*f, 0, -np.inf], [np.inf, 1.001*f, 2*np.pi, np.inf]),
@@ -93,4 +114,4 @@ def demodulate_signal(time, signal, frequencies, boundaries):
 
 
 def demodulate_amplitudes(time, signal, frequencies, boundaries):
-    return np.asarray([fit.amplitude for fit in demodulate_signal(time, signal, frequencies, boundaries)])
+    return np.asarray([fit.amplitude for fit in demodulate_signal(time, signal, frequencies, boundaries, normalize=False)])

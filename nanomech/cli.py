@@ -49,7 +49,7 @@ def excitation_execute(args):
 
 COMMANDS = (
     ("excitation-fit", "Fit excitation coefficients from NHF point zero", excitation_parser, excitation_execute),
-    ("vea", "Preview VEA sample point selection", vea_command.configure_parser, vea_command.execute),
+    ("vea", "Prepare calibration and fit static sample response", vea_command.configure_parser, vea_command.execute),
 )
 
 

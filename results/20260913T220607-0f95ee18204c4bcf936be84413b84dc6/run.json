@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "command": "vea",
+  "stage": "static",
+  "status": "success",
+  "sample": "C:\\Users\\iobataya\\Documents\\GitHub\\nanomech_nhf\\test-data-large\\VEA-500-5k-sample.nhf",
+  "calibration": "C:\\Users\\iobataya\\Documents\\GitHub\\nanomech_nhf\\test-data-large\\VEA-500-5k-calibration.nhf",
+  "calibration_source": "CLI",
+  "static_config": {
+    "fit_direction": "Advance",
+    "tip_radius": 5e-09,
+    "poisson_ratio": 0.5,
+    "baseline_start": 0.05,
+    "baseline_end": 0.5
+  },
+  "probe": {
+    "sensitivity": {
+      "value": 4.4380000000000004e-08,
+      "unit": "m/V",
+      "source": "sample:C:\\Users\\iobataya\\Documents\\GitHub\\nanomech_nhf\\test-data-large\\VEA-500-5k-sample.nhf:spm_probe_calibration_deflection_sensitivity"
+    },
+    "spring_constant": {
+      "value": 0.08405063054669279,
+      "unit": "N/m",
+      "source": "sample:C:\\Users\\iobataya\\Documents\\GitHub\\nanomech_nhf\\test-data-large\\VEA-500-5k-sample.nhf:spm_probe_calibration_spring_constant"
+    }
+  },
+  "max_count": 10,
+  "crop_area": "0,0:3,3",
+  "selected_count": 10,
+  "total_count": 16384,
+  "plot_sample": true,
+  "max_plot_sample": null
+}

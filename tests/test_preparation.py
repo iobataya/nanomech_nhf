@@ -68,6 +68,30 @@ def test_sine_result_contract():
     assert fit.residual_norm < 1e-6
 
 
+@pytest.mark.parametrize("amplitude", [1e-12, 1e-9, 1.])
+def test_normalized_sine_recovers_small_signals(amplitude):
+    t = np.linspace(0,.02,1000)
+    signal = amplitude*np.sin(2*np.pi*500*t+.6)+.2*amplitude
+    fit, = demodulate_signal(t,signal,[500],[0,len(t)])
+    np.testing.assert_allclose([fit.amplitude/amplitude,fit.frequency_hz,fit.phase_rad,fit.dc/amplitude],
+                               [1.,500,1.6,.2],rtol=1e-6)
+    assert fit.residual_norm/amplitude < 1e-6
+
+
+def test_fixed_drift_analytic_jacobian():
+    from nm_models import FixedDriftSine
+    model = FixedDriftSine(1e-9)
+    model.param_scales = np.array([1e-9,500,1,1e-9])
+    p = np.array([2.,1.,.6,.2])
+    t = np.linspace(0,.02,100)
+    y = np.zeros_like(t)
+    h = 1e-6
+    finite = np.column_stack([(model._residuals_scaled(p+np.eye(4)[i]*h,t,y)
+                              -model._residuals_scaled(p-np.eye(4)[i]*h,t,y))/(2*h) for i in range(4)])
+    np.testing.assert_allclose(model._jacobian_scaled(p,t,y),finite,rtol=1e-6,atol=1e-7)
+    assert model.param_count == 4
+
+
 def test_real_preparation_logs_all_fits_without_sample_waveforms(monkeypatch, caplog):
     from nanosurf.utils.io import nhf_reader
     directory = Path(__file__).resolve().parents[1]/"test-data-large"
@@ -97,4 +121,4 @@ def test_failed_calibration_fit_propagates(monkeypatch):
     monkeypatch.setattr("nanomech.excitation.optimize.least_squares", lambda *a, **k:
                         SimpleNamespace(success=False, x=np.ones(4), message="no convergence"))
     with pytest.raises(ValueError, match="no convergence"):
-        demodulate_signal(np.linspace(0,1,100),np.ones(100),[5],[0,100])
+        demodulate_signal(np.linspace(0,1,100),np.sin(np.linspace(0,10,100)),[5],[0,100])

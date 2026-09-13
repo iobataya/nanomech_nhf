@@ -48,7 +48,7 @@ class NanomechModel:
                 initial_params[i] = manual_val  # overwrite with user-provided value
         return initial_params
 
-    def fit(self, x, y, bounds=None, ftol=1e-8, xtol=1e-8, gtol=1e-8, method='trf'):
+    def fit(self, x, y, bounds=None, ftol=1e-8, xtol=1e-8, gtol=1e-8, method='trf', max_nfev=None):
         """
         Method to fit the model to data (x, y) using least squares optimization.
         This method handles normalization, fitting, and unit restoration internally.
@@ -82,6 +82,7 @@ class NanomechModel:
             xtol=xtol,
             gtol=gtol,
             method=method,
+            max_nfev=max_nfev,
         )
         
         # 5. Restoring the obtained internal parameters to physical units
@@ -225,9 +226,48 @@ class Sine(NanomechModel):
         """Wrap phase to the range [-pi, pi]."""
         return (phase + np.pi) % (2 * np.pi) - np.pi
 
+class FixedDriftSine(Sine):
+    """Four-parameter sine with exactly zero drift and normalized residuals.
+
+    Physical parameters are amplitude, frequency, phase and DC. The phase uses
+    Sine's sin(2*pi*f*t + phase) convention. residual_scale has signal units.
+    """
+    def __init__(self, residual_scale):
+        super().__init__(name="FixedDriftSine")
+        if not np.isfinite(residual_scale) or residual_scale <= 0:
+            raise ValueError("residual_scale must be finite and positive")
+        self.residual_scale = float(residual_scale)
+        self.param_count = 4
+        self.parameters = {key: [values[i] for i in (0, 1, 2, 4)]
+                           for key, values in self.parameters.items()}
+        self.parameters["units"] = ["signal", "Hz", "rad", "signal"]
+        self.param_scales = np.ones(4)
+
+    @staticmethod
+    def _with_zero_drift(params):
+        return np.array([params[0], params[1], params[2], 0., params[3]])
+
+    def evaluate(self, params, x):
+        return Sine.evaluate(self, self._with_zero_drift(params), x)
+
+    def residuals(self, params, x, y):
+        return (y - self.evaluate(params, x)) / self.residual_scale
+
+    def jacobian(self, params, x, y):
+        return Sine.jacobian(self, self._with_zero_drift(params), x, y)[:, [0, 1, 2, 4]] / self.residual_scale
+
+    def estimate_initial_params(self, x, y):
+        if self.parameters.get("init") is None:
+            raise ValueError("FixedDriftSine requires explicit initial parameters")
+        return np.asarray(self.parameters["init"], dtype=float)
+
+
 class HertzSphere(NanomechModel):
     """A simple Hertzian contact model for a spherical indenter"""
-    def __init__(self, tip_radius, poisson_ratio, ignore_adhesion=True):
+    def __init__(self, tip_radius, poisson_ratio, ignore_adhesion=True, residual_scale=1.0):
+        if not np.isfinite(residual_scale) or residual_scale <= 0:
+            raise ValueError("residual_scale must be finite and positive")
+        self.residual_scale = float(residual_scale)
         super().__init__("HertzSphere", 
                          parameters={
                             "name":["E_eff","x0"], 
@@ -265,11 +305,11 @@ class HertzSphere(NanomechModel):
         # 残差 y - evaluate に対する偏微分
         jacobian[:, 0] = -a_sphere * (indentation ** 1.5)
         jacobian[:, 1] = 1.5 * a_sphere * E_eff * (indentation ** 0.5)
-        return jacobian
+        return jacobian / self.residual_scale
 
     def residuals(self, params, x, y):
         """Compute the residuals for the Hertzian model."""
-        return y - self.evaluate(params, x)
+        return (y - self.evaluate(params, x)) / self.residual_scale
     
     def estimate_initial_params(self, x, y):
         """Estimate initial parameters for the Hertzian model."""
@@ -281,4 +321,3 @@ class HertzSphere(NanomechModel):
         E_eff_typical = 10e6
 
         return self._map_manual_initial_params(initial_params=np.array([E_eff_typical, x0_estimate], dtype=np.float64))
-    
