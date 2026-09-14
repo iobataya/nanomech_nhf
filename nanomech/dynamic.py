@@ -51,7 +51,7 @@ def fit_dynamic_point(time, raw_deflection, z, meta, deflection_unit, attributes
                 previous_phase.pop(channel,None)
                 continue
             try:
-                fit, = demodulate_signal(t,signals[channel],[f],[0,len(t)])
+                fit, = demodulate_signal(t,signals[channel],[f],[0,len(t)], frequency_mode="fixed")
                 phase = fit.phase_rad
                 if channel in previous_phase:
                     phase = np.unwrap([previous_phase[channel],phase])[1]

@@ -114,7 +114,7 @@ def prepare_calibration(sample_path, calibration, *, cli=None, config=None, conf
     frequencies = tuple(sweep.freq_list)
     fits = {}
     for name, values in (("deflection", d), ("indentation", -(z+d)), ("position_z", z)):
-        fits[name] = demodulate_signal(time, values, frequencies, boundaries)
+        fits[name] = demodulate_signal(time, values, frequencies, boundaries, frequency_mode="validate" if name == "deflection" else "fixed")
         for frequency, fit in zip(frequencies, fits[name]):
             logger.info("Calibration fit: channel=%s, frequency_hz=%.12g, amplitude_m=%.12g, fitted_frequency_hz=%.12g, phase_rad=%.12g, dc_m=%.12g, residual_norm_m=%.12g",
                         name, frequency, fit.amplitude, fit.frequency_hz, fit.phase_rad, fit.dc, fit.residual_norm)

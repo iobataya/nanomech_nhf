@@ -1,0 +1,132 @@
+digraph VEA_Analysis {
+    graph [
+        rankdir=TB,
+        bgcolor="white",
+        fontname="Helvetica",
+        nodesep=0.6,
+        ranksep=0.8,
+        splines=true
+    ];
+
+    node [
+        shape=box,
+        style="filled,rounded",
+        fillcolor="#f5f7ff",
+        color="#4a4a4a",
+        fontname="Helvetica",
+        fontsize=12
+    ];
+
+    edge [
+        color="#3b4a5a",
+        arrowsize=0.8,
+        penwidth=1.2
+    ];
+
+    subgraph cli {
+        label="CLI / entry";
+        main [label="main()"];
+        vea [label="vea_command.execute(args)"];
+        main -> vea;
+    }
+
+    subgraph config {
+        label="設定集約";
+        static_cfg [label="StaticConfig\nmodel, tip_radius,\npoisson_ratio,\nfit_direction,..."];
+        selection [label="selection\nmax_count, crop_area"];
+        probe [label="probe\nsensitivity,\nspring_constant"];
+        freqs [label="frequencies_hz"];
+    }
+
+    vea -> static_cfg;
+    vea -> selection;
+    vea -> probe;
+
+    subgraph selection_block {
+        label="選点";
+        select_points [label="select_sample_points(...)"];
+        pointsel [label="PointSelection\npoint_indices,\nwidth, height"];
+        select_points -> pointsel;
+    }
+
+    vea -> select_points;
+    selection -> select_points;
+
+    subgraph calibration_block {
+        label="校正読み込み";
+        loadcal [label="load_calibration(...)"];
+        calib_input [label="CalibrationInput\nmeasurement"];
+        loadcal -> calib_input;
+    }
+    vea -> loadcal;
+
+    subgraph prep_block {
+        label="校正準備";
+        prepare [label="prepare_calibration(...)"];
+        resolve [label="resolve_probe(...)"];
+        recal [label="recalibrate_deflection(...)"];
+        demod [label="demodulate_signal(...)"];
+        prep_res [label="CalibrationPreparation\nprobe, frequencies_hz,\nfits, boundaries"];
+        prepare -> resolve;
+        prepare -> recal;
+        prepare -> demod;
+        resolve -> probe;
+        recal -> prep_res;
+        demod -> prep_res;
+    }
+
+    loadcal -> prepare;
+    calib_input -> prepare;
+    probe -> prepare;
+    selection -> prepare;
+
+    subgraph static_block {
+        label="静的解析";
+        analyze_static [label="analyze_static(...)"];
+        fit_static [label="fit_static_point(...)"];
+        fit_contact [label="fit_contact(...)"];
+        fit_hertz [label="fit_hertz(...)"];
+        read_channel [label="read_point_channel(...)"];
+        static_table [label="static_table\nper point"];
+        analyze_static -> read_channel;
+        analyze_static -> fit_static;
+        fit_static -> fit_contact;
+        fit_contact -> fit_hertz;
+        fit_static -> static_table;
+    }
+
+    selection -> analyze_static;
+    probe -> analyze_static;
+    static_cfg -> analyze_static;
+    prep_res -> analyze_static;
+
+    subgraph dynamic_block {
+        label="動的解析";
+        analyze_dynamic [label="analyze_dynamic(...)"];
+        fit_dynamic [label="fit_dynamic_point(...)"];
+        dynamic_table [label="dynamic_table\nper point/frequency"];
+        analyze_dynamic -> fit_dynamic;
+        fit_dynamic -> dynamic_table;
+    }
+
+    selection -> analyze_dynamic;
+    probe -> analyze_dynamic;
+    static_table -> analyze_dynamic;
+    freqs -> analyze_dynamic;
+
+    subgraph final_block {
+        label="最終評価";
+        moduli [label="calculate_moduli(...)"];
+        csv [label="vea_results.csv"];
+        meta [label="run.json"];
+        dynamic_table -> moduli;
+        static_table -> moduli;
+        prep_res -> moduli;
+        moduli -> csv;
+        moduli -> meta;
+    }
+
+    static_table -> dynamic_table [style=invis];
+    pointsel -> analyze_static;
+    pointsel -> analyze_dynamic;
+}

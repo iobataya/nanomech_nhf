@@ -1,5 +1,6 @@
 """Excitation response fit, using the legacy numerical conventions."""
 from dataclasses import dataclass
+import logging
 
 import numpy as np
 from scipy import optimize
@@ -58,12 +59,17 @@ class SineFitResult:
     residual_norm: float
 
 
-def demodulate_signal(time, signal, frequencies, boundaries, *, normalize=True):
+def demodulate_signal(time, signal, frequencies, boundaries, *, normalize=True, frequency_mode="free"):
     """Central 40% sine fit; returned phase retains the legacy phi-1 convention.
 
-    Calibration and sample VEA use normalized FixedDriftSine. The unnormalized
-    branch is retained only for the separately specified legacy excitation fit.
+    ``validate`` estimates frequency in 0.5..1.5 times the NHF frequency and
+    rejects relative errors above 5%, then refits at the exact NHF frequency.
+    ``fixed`` solves normalized sine/cosine/DC least squares at that frequency.
+    Both use FixedDriftSine's zero-drift equation and residual convention.
+    The default and unnormalized branch retain the earlier excitation fit.
     """
+    if frequency_mode not in ("free", "fixed", "validate"):
+        raise ValueError("Unknown frequency mode")
     time, signal = np.asarray(time), np.asarray(signal)
     bounds = np.asarray(boundaries)
     if time.ndim != 1 or signal.shape != time.shape or not np.all(np.isfinite(time)) or not np.all(np.isfinite(signal)):
@@ -88,6 +94,42 @@ def demodulate_signal(time, signal, frequencies, boundaries, *, normalize=True):
             scale = initial[0]
             if scale <= 0:
                 raise ValueError(f"No oscillation amplitude at {f} Hz")
+            if frequency_mode in ("fixed", "validate"):
+                def seed(frequency):
+                    angle = 2*np.pi*frequency*tf
+                    design = np.column_stack((np.sin(angle), np.cos(angle), np.ones_like(tf)))
+                    coefficients, _, rank, _ = np.linalg.lstsq(design, yf/scale, rcond=None)
+                    if rank < 3:
+                        raise ValueError("Rank deficient fixed-frequency sine fit")
+                    a, b, dc = coefficients*scale
+                    phase = (np.arctan2(b, a)+1) % (2*np.pi)-1
+                    return [np.hypot(a,b), frequency, phase, dc], np.linalg.norm(design@coefficients-yf/scale)
+                if frequency_mode == "validate":
+                    # Search beyond the acceptance interval so mismatches cannot be hidden by bounds.
+                    candidates = [seed(candidate) for candidate in np.linspace(.5*f,1.5*f,101)]
+                    initial_free, _ = min(candidates, key=lambda item:item[1])
+                    model = FixedDriftSine(scale)
+                    model.param_scales = np.array([scale,f,1.,max(abs(initial[3]),scale)])
+                    model.parameters["init"] = initial_free
+                    estimated = model.fit(tf,yf,
+                        bounds=([0,.5*f,-np.inf,-np.inf],[np.inf,1.5*f,np.inf,np.inf]),
+                        ftol=1e-12,xtol=1e-12,gtol=1e-12)
+                    if not model.last_results["raw_result"].success or not np.all(np.isfinite(estimated)):
+                        raise ValueError(f"Calibration frequency fit failed at {f} Hz")
+                    error = abs(estimated[1]-f)/f
+                    logging.getLogger(__name__).info(
+                        "Calibration frequency check: NHF=%.12g Hz fitted=%.12g Hz error=%.6g%%",f,estimated[1],100*error)
+                    if error > .05 + 1e-12:
+                        raise ValueError(f"Calibration frequency error exceeds 5%: NHF={f:.12g} Hz fitted={estimated[1]:.12g} Hz error={100*error:.6g}%")
+                # With f and drift fixed, sine/cosine/DC are a linear normalized least-squares problem.
+                params, _ = seed(f)
+                model = FixedDriftSine(scale)
+                residual = model.residuals(params,tf,yf)
+                if not np.all(np.isfinite(params)) or params[0] <= 0:
+                    raise ValueError(f"Invalid fixed-frequency sine fit at {f} Hz")
+                amplitudes.append(SineFitResult(float(params[0]),float(f),float(params[2]+1),
+                    float(params[3]),float(np.linalg.norm(residual)*scale)))
+                continue
             model = FixedDriftSine(scale)
             model.param_scales = np.array([scale, f, 1., max(abs(initial[3]), scale)])
             model.parameters["init"] = [initial[0], f, initial[2]-1, initial[3]]

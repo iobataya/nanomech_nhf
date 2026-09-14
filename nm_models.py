@@ -321,3 +321,68 @@ class HertzSphere(NanomechModel):
         E_eff_typical = 10e6
 
         return self._map_manual_initial_params(initial_params=np.array([E_eff_typical, x0_estimate], dtype=np.float64))
+
+
+class ContactPowerModel(NanomechModel):
+    """Legacy contact equations in SI units, with analytic residual derivatives.
+
+    Force = c*E*d**p - a*gamma*d**q for d>0, zero otherwise.
+    DMT sphere is discontinuous at contact; derivatives are piecewise derivatives.
+    """
+    def __init__(self, name, coefficient, power, adhesion_coefficient=0., adhesion_power=0., residual_scale=1.):
+        if not np.isfinite(residual_scale) or residual_scale <= 0:
+            raise ValueError("residual_scale must be positive and finite")
+        adhesive = adhesion_coefficient != 0
+        names = ["E", "x0"] + (["gamma"] if adhesive else [])
+        super().__init__(name, parameters={"name":names,"abbrev":names,
+            "units":["Pa","m"]+(["N/m"] if adhesive else [])})
+        self.coefficient, self.power = coefficient,power
+        self.adhesion_coefficient, self.adhesion_power = adhesion_coefficient,adhesion_power
+        self.residual_scale = residual_scale
+
+    def evaluate(self,p,x):
+        d = np.maximum(np.asarray(x)-p[1],0.)
+        value = self.coefficient*p[0]*d**self.power
+        if self.param_count == 3:
+            value -= self.adhesion_coefficient*p[2]*d**self.adhesion_power
+        return np.where(d>0,value,0.)
+
+    def residuals(self,p,x,y):
+        return (y-self.evaluate(p,x))/self.residual_scale
+
+    def jacobian(self,p,x,y):
+        d = np.maximum(np.asarray(x)-p[1],0.)
+        jac = np.zeros((len(d),self.param_count))
+        jac[:,0] = -self.coefficient*d**self.power
+        jac[:,1] = self.coefficient*p[0]*self.power*d**(self.power-1)
+        if self.param_count == 3:
+            jac[:,2] = self.adhesion_coefficient*d**self.adhesion_power
+            if self.adhesion_power:
+                jac[:,1] -= self.adhesion_coefficient*p[2]*self.adhesion_power*d**(self.adhesion_power-1)
+        jac[d<=0,:] = 0
+        return jac/self.residual_scale
+
+
+CONTACT_MODELS = ("Hertz","Sneddon","Pyramid","DMT_Sphere","DMT_Cone")
+
+
+def canonical_contact_model(name):
+    for model in CONTACT_MODELS:
+        if isinstance(name,str) and name.lower() == model.lower():
+            return model
+    raise ValueError(f"Unknown contact model: {name}")
+
+
+def create_contact_model(name, tip_radius, poisson_ratio, cone_half_angle=15., residual_scale=1.):
+    name = canonical_contact_model(name)
+    nu = poisson_ratio
+    t = np.tan(np.deg2rad(cone_half_angle))
+    if name == "Hertz":
+        return HertzSphere(tip_radius,nu,residual_scale=residual_scale)
+    coefficients = {
+        "Sneddon":(2*t/(np.pi*(1-nu**2)),2,0,0),
+        "Pyramid":(t/(np.sqrt(2)*(1-nu**2)),2,0,0),
+        "DMT_Sphere":(4*np.sqrt(tip_radius)/(3*(1-nu**2)),1.5,2*np.pi*tip_radius,0),
+        "DMT_Cone":(t/(1-nu**2),2,2*np.pi/t,1),
+    }
+    return ContactPowerModel(name,*coefficients[name],residual_scale=residual_scale)

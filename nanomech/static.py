@@ -5,7 +5,7 @@ import logging
 
 import numpy as np
 import pandas as pd
-from nm_models import HertzSphere
+from nm_models import HertzSphere, create_contact_model, canonical_contact_model
 
 from nm_io import load_nhf_file, Segment, Channel, get_offset_datapoints
 from .preparation import recalibrate_deflection, positive
@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class StaticConfig:
+    model: str = "Hertz"
+    cone_half_angle: float = 15.
     fit_direction: str = "Advance"
     tip_radius: float = 5e-9
     poisson_ratio: float = .5
@@ -22,6 +24,9 @@ class StaticConfig:
     baseline_end: float = .5
 
     def validate(self):
+        canonical_contact_model(self.model)
+        if not np.isfinite(self.cone_half_angle) or not 0 < self.cone_half_angle < 90:
+            raise ValueError("cone_half_angle must be between 0 and 90 degrees")
         if self.fit_direction not in ("Advance", "Retract"):
             raise ValueError("fit_direction must be Advance or Retract")
         positive(self.tip_radius, "tip_radius")
@@ -80,6 +85,48 @@ def fit_hertz(indentation, force, radius, poisson_ratio):
             "residual_norm_n":float(np.linalg.norm(result.fun)*scale)}
 
 
+def fit_contact(indentation,force,config):
+    name = canonical_contact_model(config.model)
+    if name == "Hertz":
+        return dict(fit_hertz(indentation,force,config.tip_radius,config.poisson_ratio),adhesion_parameter_n_per_m=0.)
+    x,y = np.asarray(indentation),np.asarray(force)
+    if x.ndim != 1 or x.shape != y.shape or len(x)<6 or not np.all(np.isfinite(x)) or not np.all(np.isfinite(y)):
+        raise ValueError("Invalid contact curve")
+    lo,span,scale = float(x.min()),float(np.ptp(x)),float(np.max(np.abs(y)))
+    if span <= 0 or scale <= 0 or np.count_nonzero(y>0)<5:
+        raise ValueError("Insufficient contact data")
+    model = create_contact_model(name,config.tip_radius,config.poisson_ratio,config.cone_half_angle,scale)
+    adhesive = model.param_count == 3
+    keep = np.ones(len(x),dtype=bool) if adhesive else y>0
+    e_scale = scale/(model.coefficient*span**model.power)
+    scales = [e_scale,span]
+    lower,upper = [1.,0.],[1e12,span]
+    if adhesive:
+        gamma_scale = scale/(model.adhesion_coefficient*span**model.adhesion_power)
+        scales.append(gamma_scale)
+        lower.append(0.);upper.append(100.)
+    model.param_scales = np.asarray(scales)
+    candidates = []
+    # DMT contact introduces a kink/discontinuity. Multiple starts reduce
+    # sensitivity to the unknown contact location; full residuals keep the
+    # optimizer from reducing error by excluding data as contact moves.
+    for fraction in ((.1,.25,.5,.7,.85,.95) if adhesive else (.25,)):
+        initial = [np.clip(e_scale,1,1e12),fraction*span]
+        if adhesive:
+            initial.append(min(gamma_scale,50.))
+        model.parameters["init"] = initial
+        params = model.fit(x[keep]-lo,y[keep],bounds=(lower,upper),
+                           ftol=1e-12,xtol=1e-12,gtol=1e-12,max_nfev=2000)
+        result = model.last_results["raw_result"]
+        if result.success and np.all(np.isfinite(params)) and np.linalg.matrix_rank(result.jac)==model.param_count:
+            candidates.append((float(np.linalg.norm(result.fun)),params.copy()))
+    if not candidates:
+        raise ValueError(f"{name} fit failed or is unidentifiable")
+    residual,params = min(candidates,key=lambda item:item[0])
+    return dict(young_modulus_pa=float(params[0]),contact_point_m=float(lo+params[1]),
+                adhesion_parameter_n_per_m=float(params[2]) if adhesive else 0.,residual_norm_n=residual*scale)
+
+
 def fit_static_point(advance_z, advance_d, retract_z, retract_d, spring_constant, config, *, plot_data=None):
     config.validate()
     start, end = int(len(advance_z)*config.baseline_start), int(len(advance_z)*config.baseline_end)
@@ -94,7 +141,7 @@ def fit_static_point(advance_z, advance_d, retract_z, retract_d, spring_constant
     ad = advance_d - (slope*(advance_z-origin)+intercept)
     rd = retract_d - (slope*(retract_z-origin)+intercept)
     z,d = (advance_z,ad) if config.fit_direction == "Advance" else (retract_z,rd)
-    result = fit_hertz(-(z+d),d*spring_constant,config.tip_radius,config.poisson_ratio)
+    result = fit_contact(-(z+d),d*spring_constant,config)
     result.update(snap_in_force_n=float(np.min(ad)*spring_constant),
                   adhesion_force_n=float(np.min(rd)*spring_constant),
                   baseline_slope=float(slope), baseline_offset_m=float(intercept-slope*origin))
@@ -103,7 +150,7 @@ def fit_static_point(advance_z, advance_d, retract_z, retract_d, spring_constant
     return result
 
 
-RESULT_COLUMNS = ("young_modulus_pa","contact_point_m","residual_norm_n","snap_in_force_n",
+RESULT_COLUMNS = ("young_modulus_pa","contact_point_m","adhesion_parameter_n_per_m","residual_norm_n","snap_in_force_n",
                   "adhesion_force_n","baseline_slope","baseline_offset_m")
 
 
@@ -120,7 +167,7 @@ def analyze_static(sample_path, selection, probe, config, *, plot_callback=None,
     records = []
     for index in range(selection.total_count):
         x,y = selection.xy(index)
-        records.append(dict(point_index=index,x_index=x,y_index=y,model="Hertz",
+        records.append(dict(point_index=index,x_index=x,y_index=y,model=canonical_contact_model(config.model),
                             fit_direction=config.fit_direction,static_status="unprocessed",failure_reason="",
                             **dict.fromkeys(RESULT_COLUMNS,0.)))
     plotted = 0

@@ -7,7 +7,7 @@ from matplotlib import get_data_path
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 from matplotlib.text import Text
-from nm_models import HertzSphere
+from nm_models import create_contact_model, canonical_contact_model
 
 logger = logging.getLogger(__name__)
 
@@ -26,17 +26,20 @@ def plot_dynamic_sample(output_directory, point_index, preparation, *, index_dig
 def plot_static_sample(output_directory, point_index, indentation, force, result, config, *, index_digits=5):
     directory = Path(output_directory)
     directory.mkdir(parents=True, exist_ok=True)
-    model_name = "Hertz"
+    model_name = canonical_contact_model(config.model)
     path = directory / sample_plot_filename(point_index,model_name,config.fit_direction.lower(),index_digits)
     x = np.linspace(np.min(indentation), np.max(indentation), 1000)
-    model = HertzSphere(config.tip_radius, config.poisson_ratio)
-    y = model.evaluate([result["young_modulus_pa"], result["contact_point_m"]], x)
+    model = create_contact_model(model_name,config.tip_radius, config.poisson_ratio,config.cone_half_angle)
+    params = [result["young_modulus_pa"], result["contact_point_m"]]
+    if model.param_count == 3:
+        params.append(result["adhesion_parameter_n_per_m"])
+    y = model.evaluate(params, x)
     figure = Figure(figsize=(10,6), layout="constrained")
     FigureCanvasAgg(figure)
     ax = figure.subplots()
     ax.plot(np.asarray(indentation)*1e9, np.asarray(force)*1e9,
             color="#2463a5", linewidth=.9, label="Measured force")
-    ax.plot(x*1e9, y*1e9, color="#d14936", linewidth=1.5, label="Hertz fit")
+    ax.plot(x*1e9, y*1e9, color="#d14936", linewidth=1.5, label=f"{model_name} fit")
     ax.set(xlabel="Indentation (nm)", ylabel="Force (nN)",
            title=f"Sample point {point_index} | {model_name} | {config.fit_direction}")
     ax.grid(alpha=.2)
@@ -47,7 +50,8 @@ def plot_static_sample(output_directory, point_index, indentation, force, result
         f"Contact point = {result['contact_point_m']*1e9:.6g} nm\n"
         f"Residual norm = {result['residual_norm_n']*1e9:.6g} nN    "
         f"R = {config.tip_radius*1e9:.6g} nm    Poisson ratio = {config.poisson_ratio:.4g}\n"
-        "Fit uses positive-force samples; indentation retains the fitted contact offset.",
+        f"Half angle = {config.cone_half_angle:g} deg    gamma = {result.get('adhesion_parameter_n_per_m',0):.6g} N/m\n"
+        "Indentation retains the fitted contact offset.",
         fontsize=10)
     ax.get_xticklabels()
     ax.get_yticklabels()

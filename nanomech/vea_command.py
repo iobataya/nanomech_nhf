@@ -1,6 +1,7 @@
 """Calibration preparation and static sample analysis CLI."""
 import json
 import logging
+import argparse
 from datetime import datetime, timezone
 from uuid import uuid4
 from pathlib import Path
@@ -19,14 +20,20 @@ def configure_parser(parser):
     parser.add_argument("--calibration", type=Path,
                         help="Calibration NHF; omitted uses .last_calibration.nhf beside main.py")
     parser.add_argument("--config", type=Path)
-    parser.add_argument("--fit-direction", "--fit_direction", choices=("Advance", "Retract"))
+    from nm_models import canonical_contact_model, CONTACT_MODELS
+    parser.add_argument("--model",type=canonical_contact_model,choices=CONTACT_MODELS)
+    parser.add_argument("--cone-half-angle", "--cone_half_angle",type=float,help="Cone/pyramid half angle in degrees")
+    parser.add_argument("--excitation", choices=("auto","Piezo","CleanDrive"))
+    parser.add_argument("--correct-drag", action=argparse.BooleanOptionalAction, default=None,
+                        help="Piezo hydrodynamic drag correction (default enabled)")
+    parser.add_argument("--fit-direction", "--fit_direction", type=str.capitalize, choices=("Advance", "Retract"))
     parser.add_argument("--tip-radius", "--tip_radius", type=float, help="Hertz sphere radius in metres")
     parser.add_argument("--poisson-ratio", "--poisson_ratio", type=float)
     parser.add_argument("--baseline-start", "--baseline_start", type=float)
     parser.add_argument("--baseline-end", "--baseline_end", type=float)
-    parser.add_argument("--plot-calibration", action="store_true",
+    parser.add_argument("--plot-calibration", action=argparse.BooleanOptionalAction, default=None,
                         help="Save all calibration frequencies vertically in one deflection/fit PNG")
-    parser.add_argument("--plot-sample", action="store_true",
+    parser.add_argument("--plot-sample", action=argparse.BooleanOptionalAction, default=None,
                         help="Save sample force/indentation PNGs with fitted curves")
     parser.add_argument("--max-plot-sample", type=int,
                         help="Maximum sample PNGs; omitted means all successful selected points (0 disables plots)")
@@ -37,20 +44,12 @@ def configure_parser(parser):
                         dest="max_count", type=int, help="Maximum attempted sample points, after crop")
     parser.add_argument("--crop_area", "--crop-area", dest="crop_area",
                         help='Inclusive bottom-left XY bounds: "x_start,y_start:x_end,y_end"')
-    parser.add_argument("--dry-run", action="store_true",
+    parser.add_argument("--dry-run", action=argparse.BooleanOptionalAction, default=None,
                         help="Select sample points and fit calibration; skip sample analysis")
 
 
 def execute(args):
-    config = {}
-    if args.config:
-        config = json.loads(args.config.read_text(encoding="utf-8"))
-        if not isinstance(config, dict) or config.get("schema_version") != 1 or config.get("command") != "vea":
-            raise ValueError("Config requires schema_version=1 and command=vea")
-        if set(config) - {"schema_version", "command", "sample", "max_count", "max_points", "crop_area", "sensitivity", "spring_constant", "output", "fit_direction", "tip_radius", "poisson_ratio", "baseline_start", "baseline_end"}:
-            raise ValueError("Unknown VEA config keys")
-        if "max_count" in config and "max_points" in config:
-            raise ValueError("Specify only one of max_count and max_points in config")
+    config = getattr(args, "file_config", {})
     source = args.sample if args.sample is not None else config.get("sample")
     if not source:
         raise ValueError("--sample or config sample is required")
@@ -100,8 +99,14 @@ def execute(args):
                                                        plot_callback=dynamic_plot_callback,max_plot_sample=args.max_plot_sample)
         dynamic_table.to_csv(run / "vea_fit_results.csv",index=False,na_rep="NaN")
         static_status = status
-        status = dynamic_status
-        metadata = dict(schema_version=1,command="vea",stage="static_and_dynamic_fitting",status=status,
+        from .moduli import excitation_method, calculate_moduli
+        method = excitation_method(Path(source), args.excitation or config.get("excitation","auto"))
+        correct_drag = args.correct_drag if args.correct_drag is not None else config.get("correct_drag",True)
+        moduli_table,status = calculate_moduli(dynamic_table,table,preparation,static_config,
+                                             excitation=method,correct_drag=correct_drag)
+        moduli_table.to_csv(run / "vea_results.csv",index=False,na_rep="NaN")
+        metadata = dict(schema_version=1,command="vea",stage="static_and_dynamic_moduli",status=status,
+                        excitation=method,correct_drag=correct_drag,use_reference=False,
                         static_status=static_status,dynamic_status=dynamic_status,
                         sample=str(Path(source).resolve()),calibration=str(calibration.path),
                         calibration_source=calibration.source,static_config=asdict(static_config),
@@ -112,5 +117,6 @@ def execute(args):
         (run / "run.json").write_text(json.dumps(metadata,indent=2,allow_nan=False),encoding="utf-8")
         logger.info("Static results saved: %s (status=%s)",run / "static_results.csv",static_status)
         logger.info("VEA fit results saved: %s (status=%s)",run / "vea_fit_results.csv",dynamic_status)
+        logger.info("VEA moduli saved: %s (status=%s)",run / "vea_results.csv",status)
         return 1 if status == "failed" else 0
     return 0

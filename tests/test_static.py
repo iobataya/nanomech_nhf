@@ -68,8 +68,14 @@ def test_cli_static_csv(tmp_path,monkeypatch):
     assert table.young_modulus_pa.iloc[0] > 0
     assert "Unnamed: 0" not in table.columns
     metadata = json.loads(csv.with_name("run.json").read_text())
-    assert metadata["stage"] == "static_and_dynamic_fitting"
+    assert metadata["stage"] == "static_and_dynamic_moduli"
     assert metadata["status"] == "success"
+    moduli = pd.read_csv(csv.with_name("vea_results.csv"))
+    assert len(moduli) == 16384*5
+    assert (moduli.loc[:9,"modulus_status"] == "success").all()
+    assert np.isfinite(moduli.loc[:9,["storage_modulus_pa","loss_modulus_pa","loss_tangent"]]).all().all()
+    assert (moduli.loc[10:,"storage_modulus_pa"] == 0).all()
+    assert moduli.young_modulus_pa.iloc[0] == pytest.approx(table.young_modulus_pa.iloc[0])
 
 
 def test_failed_points_nan_and_status(monkeypatch):
