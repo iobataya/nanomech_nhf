@@ -15,7 +15,6 @@ def ensure_output_dir():
         os.makedirs(OUTPUT_DIR)
 
 from nm_io import *
-from nm_plot import *
 
 NHFDataset: TypeAlias = nhf_reader.NHFDataset
 NHFSegment: TypeAlias = nhf_reader.NHFSegment
