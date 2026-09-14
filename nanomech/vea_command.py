@@ -25,7 +25,7 @@ def configure_parser(parser):
     parser.add_argument("--baseline-start", "--baseline_start", type=float)
     parser.add_argument("--baseline-end", "--baseline_end", type=float)
     parser.add_argument("--plot-calibration", action="store_true",
-                        help="Save per-frequency deflection and fitted-curve PNGs")
+                        help="Save all calibration frequencies vertically in one deflection/fit PNG")
     parser.add_argument("--plot-sample", action="store_true",
                         help="Save sample force/indentation PNGs with fitted curves")
     parser.add_argument("--max-plot-sample", type=int,
@@ -85,13 +85,24 @@ def execute(args):
     logger.info("Selected XY (first 20): %s", [selection.xy(i) for i in preview])
     if not args.dry_run:
         plot_callback = None
+        dynamic_plot_callback = None
+        index_digits = len(str(selection.total_count))
         if args.plot_sample:
-            from .sample_plot import plot_static_sample
-            plot_callback = partial(plot_static_sample, run / "sample")
+            from .sample_plot import plot_static_sample, plot_dynamic_sample
+            plot_callback = partial(plot_static_sample, run / "sample",index_digits=index_digits)
+            dynamic_plot_callback = partial(plot_dynamic_sample, run / "sample",index_digits=index_digits)
         table,status = analyze_static(Path(source),selection,preparation.probe,static_config,
                                      plot_callback=plot_callback, max_plot_sample=args.max_plot_sample)
         table.to_csv(run / "static_results.csv",index=False,na_rep="NaN")
-        metadata = dict(schema_version=1,command="vea",stage="static",status=status,
+        from .dynamic import analyze_dynamic
+        dynamic_table,dynamic_status = analyze_dynamic(Path(source),selection,preparation.probe,
+                                                       table,preparation.frequencies_hz,
+                                                       plot_callback=dynamic_plot_callback,max_plot_sample=args.max_plot_sample)
+        dynamic_table.to_csv(run / "vea_fit_results.csv",index=False,na_rep="NaN")
+        static_status = status
+        status = dynamic_status
+        metadata = dict(schema_version=1,command="vea",stage="static_and_dynamic_fitting",status=status,
+                        static_status=static_status,dynamic_status=dynamic_status,
                         sample=str(Path(source).resolve()),calibration=str(calibration.path),
                         calibration_source=calibration.source,static_config=asdict(static_config),
                         probe={key:asdict(value) for key,value in preparation.probe.items()},
@@ -99,6 +110,7 @@ def execute(args):
                         total_count=selection.total_count,plot_sample=args.plot_sample,
                         max_plot_sample=args.max_plot_sample)
         (run / "run.json").write_text(json.dumps(metadata,indent=2,allow_nan=False),encoding="utf-8")
-        logger.info("Static results saved: %s (status=%s)",run / "static_results.csv",status)
+        logger.info("Static results saved: %s (status=%s)",run / "static_results.csv",static_status)
+        logger.info("VEA fit results saved: %s (status=%s)",run / "vea_fit_results.csv",dynamic_status)
         return 1 if status == "failed" else 0
     return 0

@@ -23,7 +23,7 @@ conda run --no-capture-output -n nanosurf python -m pytest tests/test_excitation
 ```
 
 Local NHF comparison tests explicitly skip when the representative input is absent.
-The VEA numerical analysis, performance optimization and GUI remain subsequent work.
+VEA moduli calculation, performance optimization and GUI remain subsequent work.
 
 ## VEA point selection preview
 
@@ -41,7 +41,8 @@ Dry-run reads sample metadata, resolves probe calibration constants, and fits
 calibration point zero. It does not load sample waveforms or calculate sample
 material properties. It logs the selected count and up to 20 point indices/XY
 positions. Without `--dry-run`, static Hertz analysis runs on selected sample
-points. Dynamic sample VEA analysis is not implemented yet. The shared selection retains the original map dimensions
+points, followed by per-frequency sample VEA sine fits. Dynamic moduli calculation
+is not implemented yet. The shared selection retains the original map dimensions
 for future full-size result output.
 
 `--config` accepts JSON with `schema_version: 1`, `command: "vea"`, `sample`,
@@ -117,7 +118,7 @@ the legacy CSV's 0.100 MPa beyond the agreed 1% tolerance. This comparison has
 not passed. The legacy fitter mixes nN input with an SI model; the new fitter
 uses consistent units and numerical scaling. Synthetic Advance/Retract curves
 with known modulus pass recovery tests. Other contact models and dynamic sample
-analysis remain subsequent work.
+moduli calculation remain subsequent work.
 
 ## Calibration plots and logging
 
@@ -139,7 +140,48 @@ The indentation coordinate retains its contact offset, matching the fitted data.
 No waveform reread or refit is performed for plotting. Failed/unprocessed points
 have no fitted plot and do not consume the plot limit. `--dry-run` skips sample
 analysis and sample plots. Currently only the implemented static Hertz model is
-plotted; dynamic sample sine fitting remains subsequent work.
+plotted for static analysis. The same option also saves dynamic deflection versus
+time with fitted sine curves, stacking all frequencies vertically in one image
+per point, matching the calibration layout. Failed deflection fits are labeled.
+`--max-plot-sample` applies independently to static and dynamic point images;
+it does not limit the number of frequency panels or analysis points.
+
+Both outputs use the shared naming rule
+`sample_point{index}_{model}_{segment}.png`, for example
+`sample_point00000_Hertz_advance.png` and `sample_point00000_sine_VEA.png`.
+Index width is `len(str(measurement_total_count))`, regardless of crop/count
+selection. `plot_static_sample(..., index_digits=5)` retains five digits as the
+API default; the CLI passes the computed width to both plotters. No frequency
+is included in a sample filename. Plotting reuses the fitted data and does not
+reload or refit the waveforms.
+
+## Sample VEA sine fitting
+
+Normal `vea` execution now runs static fitting and then VEA fitting for each
+successful selected point. The command and selection options are unchanged.
+`--dry-run` still stops after calibration preparation.
+
+`vea_fit_results.csv` is written via pandas with one row per original point and
+nominal sweep frequency. Columns include point index, XY, frequency/index,
+static/VEA/channel status, failure reason, and each channel's amplitude (m), fitted
+frequency (Hz), phase (rad), DC (m), and residual norm (m). Channels are deflection,
+indentation and position_z. Rows retain acquisition order, then sweep order.
+
+Deflection receives resolved sensitivity and the static linear baseline
+correction; indentation is `-(Z + corrected_deflection) - contact_point`.
+Position Z retains its calibrated waveform. Fits use `FixedDriftSine`, normalized
+residuals/Jacobians and the central 40%, with the same phase convention as
+calibration. Phase is unwrapped within consecutive successful frequency fits;
+an error resets unwrapping for that channel. Point-local raw slices prevent
+loading the entire sample waveform. Sweep boundaries retain the calibration's
+legacy metadata convention.
+
+Unselected rows have zero results and `unprocessed`. Static failures produce NaN
+and `skipped_static_failed`. A failed frequency/channel records NaN and a reason;
+successful channels and later frequencies are preserved. `run.json` records both
+static and dynamic status. No fully successful frequency row returns exit code 1;
+mixed success records `partial_failure`. Moduli, drag/reference correction and
+reference-channel fitting are not included in this stage.
 
 Calibration waveform plots can be saved during dry-run:
 
@@ -147,8 +189,9 @@ Calibration waveform plots can be saved during dry-run:
 python main.py vea --sample test-data-large/VEA-500-5k-sample.nhf --calibration test-data-large/VEA-500-5k-calibration.nhf --max_count 4 --dry-run --plot-calibration --output results
 ```
 
-One PNG per frequency is saved to `results/<unique-run>/calibration/`, for example
-`calibration_deflection_000_500Hz.png`. The plot overlays calibrated deflection
+All frequencies are stacked vertically in sweep order in one PNG:
+`results/<unique-run>/calibration/calibration_deflection.png`. Each subplot is
+labeled with its frequency; the filename contains no frequency. The plot overlays calibrated deflection
 (nm) against time from segment start (ms) with the existing sine fit, and shades
 the central 40% fitting interval. Plotting does not refit or open a GUI window.
 Without `--plot-calibration`, no plots are created. `--output` overrides config

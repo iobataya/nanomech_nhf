@@ -53,10 +53,22 @@ def test_cli_plot_limit_does_not_limit_analysis(tmp_path,monkeypatch,options,cou
     monkeypatch.setattr(calibration,"SCRIPT_DIRECTORY",tmp_path)
     assert main(["vea","--sample",str(sample),"--calibration",str(cal),"--max_count","2",
                  "--output",str(tmp_path/"results")]+options) == 0
-    assert len(list((tmp_path/"results").glob("*/sample/*.png"))) == count
+    assert len(list((tmp_path/"results").glob("*/sample/*_Hertz_advance.png"))) == count
+    dynamic = list((tmp_path/"results").glob("*/sample/*_sine_VEA.png"))
+    assert len(dynamic) == count
+    for path in dynamic:
+        with Image.open(path) as image:
+            assert image.size == (1600,3200)
     csv, = (tmp_path/"results").glob("*/static_results.csv")
     assert (pd.read_csv(csv).static_status == "success").sum() == 2
 
 
 def test_bad_plot_limit():
     assert main(["vea","--sample","unused.nhf","--max-plot-sample","-1"]) == 1
+
+
+def test_filename_width_and_segments():
+    from nanomech.sample_plot import sample_plot_filename
+    assert sample_plot_filename(3,"Hertz","advance") == "sample_point00003_Hertz_advance.png"
+    assert sample_plot_filename(3,"sine","VEA",2) == "sample_point03_sine_VEA.png"
+    assert sample_plot_filename(3,"Hertz","retract",1) == "sample_point3_Hertz_retract.png"

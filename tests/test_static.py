@@ -68,7 +68,7 @@ def test_cli_static_csv(tmp_path,monkeypatch):
     assert table.young_modulus_pa.iloc[0] > 0
     assert "Unnamed: 0" not in table.columns
     metadata = json.loads(csv.with_name("run.json").read_text())
-    assert metadata["stage"] == "static"
+    assert metadata["stage"] == "static_and_dynamic_fitting"
     assert metadata["status"] == "success"
 
 

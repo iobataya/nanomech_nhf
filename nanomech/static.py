@@ -31,7 +31,7 @@ class StaticConfig:
             raise ValueError("baseline range must satisfy 0 <= start < end <= 1")
 
 
-def read_point_channel(segment, name, index):
+def read_point_channel(segment, name, index, *, allow_nonfinite=False):
     """Slice raw storage first; use Nanosurf's calibration on the copied channel.
 
     Keeps the source NHFDataset and its cache unchanged. Only point-sized raw
@@ -49,7 +49,7 @@ def read_point_channel(segment, name, index):
     channel.cached_signal_id = object()
     channel.read_data()
     values = np.asarray(channel.get_masked_dataset().filled(np.nan), dtype=float)
-    if values.ndim != 1 or not np.all(np.isfinite(values)):
+    if values.ndim != 1 or (not allow_nonfinite and not np.all(np.isfinite(values))):
         raise ValueError(f"Nonfinite or invalid {name} waveform")
     return values, channel.unit
 

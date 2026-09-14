@@ -12,11 +12,22 @@ from nm_models import HertzSphere
 logger = logging.getLogger(__name__)
 
 
-def plot_static_sample(output_directory, point_index, indentation, force, result, config):
+def sample_plot_filename(point_index, model, segment, index_digits=5):
+    return f"sample_point{point_index:0{index_digits}d}_{model}_{segment}.png"
+
+
+def plot_dynamic_sample(output_directory, point_index, preparation, *, index_digits=5):
+    from .calibration_plot import plot_calibration
+    return plot_calibration(preparation,output_directory,
+        filename=sample_plot_filename(point_index,"sine","VEA",index_digits),
+        title=f"Sample point {point_index} | sine | VEA")
+
+
+def plot_static_sample(output_directory, point_index, indentation, force, result, config, *, index_digits=5):
     directory = Path(output_directory)
     directory.mkdir(parents=True, exist_ok=True)
     model_name = "Hertz"
-    path = directory / f"sample_point{point_index:05d}_{model_name}_{config.fit_direction.lower()}.png"
+    path = directory / sample_plot_filename(point_index,model_name,config.fit_direction.lower(),index_digits)
     x = np.linspace(np.min(indentation), np.max(indentation), 1000)
     model = HertzSphere(config.tip_radius, config.poisson_ratio)
     y = model.evaluate([result["young_modulus_pa"], result["contact_point_m"]], x)

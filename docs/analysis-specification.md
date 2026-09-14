@@ -259,6 +259,13 @@ VEAのcalibrationの確定仕様:
 
 ### 解析結果の内容
 
+2026-09-14 実装段階: sampleのstatic成功点に対し、VEAのDeflection／Indentation／Zを
+周波数別に復調する処理を実装。静的ベースラインをdeflectionから減算し、
+indentationは `-(Z + corrected_deflection) - contact_point` とする。
+フィット結果は `vea_fit_results.csv` に全点×全周波数で保存する。
+物性計算前の中間結果であり、貯蔵・損失弾性率や参照補正の完了を意味しない。
+周波数・チャネル単位の失敗はNaNと理由で記録し、それ以外を続行する。
+
 - 点ごとの接触点、静的弾性率、該当時の付着パラメータ、snap-in・adhesionの力。
 - 点×周波数ごとの貯蔵弾性率、損失弾性率、損失正接。
 - 周波数、座標、単位、使用した設定と校正値の由来。

@@ -23,14 +23,14 @@ def test_plot_uses_existing_fit(tmp_path, monkeypatch):
     d = fit.amplitude*np.sin(2*np.pi*(t-t[0])*fit.frequency_hz+.3)+fit.dc
     result = CalibrationPreparation({}, (500.,), {"deflection":(fit,)}, t, d, np.array([0,100]))
     files = plot_calibration(result, tmp_path)
-    assert len(files) == 1 and "500Hz" in files[0].name
+    assert len(files) == 1 and files[0].name == "calibration_deflection.png"
     np.testing.assert_allclose(lines[0][0], (t-t[0])*1e3)
     np.testing.assert_allclose(lines[0][1], d*1e9)
     tx = lines[1][0]/1e3
     np.testing.assert_allclose(lines[1][1], (fit.amplitude*np.sin(2*np.pi*501*tx+.3)+fit.dc)*1e9)
     with Image.open(files[0]) as image:
         assert image.format == "PNG"
-        assert image.size == (1600,800)
+        assert image.size == (1600,640)
 
 
 def test_real_cli_plots_and_opt_in(tmp_path, monkeypatch):
@@ -53,7 +53,8 @@ def test_real_cli_plots_and_opt_in(tmp_path, monkeypatch):
     assert not (tmp_path/"plots").exists()
     assert main(args+["--plot-calibration"]) == 0
     files = list((tmp_path/"plots").glob("*/calibration/*.png"))
-    assert len(files) == 5
+    assert len(files) == 1
     for path in files:
         with Image.open(path) as image:
+            assert image.size == (1600,3200)
             image.verify()
