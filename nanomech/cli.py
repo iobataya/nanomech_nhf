@@ -1,12 +1,8 @@
 """Command registration and noninteractive file output."""
 import argparse
-from dataclasses import asdict
-from datetime import datetime, timezone
-import json
 from pathlib import Path
 import logging
 import sys
-from uuid import uuid4
 from .logging_config import configure_logging
 from . import vea_command
 
@@ -20,28 +16,17 @@ def excitation_parser(parser):
 
 
 def excitation_execute(args):
-    from .workflows import excitation_fit
-
     config = getattr(args, "file_config", {})
     source = args.input or config.get("input")
     if not source:
         raise ValueError("--input or config input is required")
-    source = Path(source)
-    output = Path(args.output or config.get("output", "results"))
-    result, provenance = excitation_fit(source)
-    run = output / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S") + "-" + uuid4().hex)
-    run.mkdir(parents=True, exist_ok=False)
-    from .config import copy_run_config
-    copy_run_config(args.config, run)
-    metadata = {"schema_version": 1, "command": "excitation-fit", "input": str(source.resolve()),
-                "measurement_index": 0, "point_index": 0, "amplitude_unit": "m",
-                **provenance,
-                "frequency_unit": "Hz", "log_base": 10, "status": "success", **asdict(result)}
-    (run / "run.json").write_text(json.dumps(metadata, indent=2, allow_nan=False), encoding="utf-8")
-    (run / "excitation_coefficients.json").write_text(
-        json.dumps(dict(zip((f"c{i}" for i in range(6)), result.coefficients)), indent=2, allow_nan=False), encoding="utf-8")
-    logger.info("%s", run)
-    return 0
+    from .requests import ExcitationFitRequest
+    from .workflows import run_excitation_fit
+    result = run_excitation_fit(ExcitationFitRequest(
+        source=Path(source), output=Path(args.output or config.get("output", "results")),
+        config_path=args.config,
+    ))
+    return 1 if result.status == "failed" else 0
 
 
 COMMANDS = (

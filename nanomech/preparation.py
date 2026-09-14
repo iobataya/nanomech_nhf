@@ -28,12 +28,12 @@ def positive(value, name):
 
 
 def resolve_probe(sample, calibration, *, cli=None, config=None, sample_path=None,
-                  calibration_path=None, config_path=None):
+                  calibration_path=None, config_path=None, override_source="CLI"):
     cli, config = cli or {}, config or {}
     resolved, missing = {}, []
     for name, attribute, unit in (("sensitivity", Attribute.SENSITIVITY, "m/V"),
                                    ("spring_constant", Attribute.SPRING_CONST, "N/m")):
-        choices = ((cli, name, "CLI"), (config, name, f"config:{config_path}:{name}"),
+        choices = ((cli, name, override_source), (config, name, f"config:{config_path}:{name}"),
                    (sample.attribute, attribute, f"sample:{sample_path}:{attribute}"),
                    (calibration.attribute, attribute, f"calibration:{calibration_path}:{attribute}"))
         for values, key, origin in choices:
@@ -82,13 +82,14 @@ class CalibrationPreparation:
     boundaries: np.ndarray
 
 
-def prepare_calibration(sample_path, calibration, *, cli=None, config=None, config_path=None):
+def prepare_calibration(sample_path, calibration, *, cli=None, config=None, config_path=None,
+                        override_source="CLI"):
     # Metadata only: do not read any sample waveform, regardless of map size.
     sample = load_nhf_file(Path(sample_path))
     measurement = calibration.measurement
     probe = resolve_probe(sample, measurement, cli=cli, config=config,
                           sample_path=Path(sample_path).resolve(), calibration_path=calibration.path,
-                          config_path=config_path)
+                          config_path=config_path, override_source=override_source)
     sweep, sample_sweep = SweepConfig(measurement), SweepConfig(sample)
     for name in ("start_frequency", "end_frequency", "datapoints", "sines_pnts", "sines_number", "sweep_type", "sweep_direction"):
         if getattr(sweep, name) != getattr(sample_sweep, name):

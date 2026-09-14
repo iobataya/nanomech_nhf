@@ -9,6 +9,7 @@ from nanomech.nm_models import HertzSphere, create_contact_model, canonical_cont
 
 from nanomech.nm_io import load_nhf_file, Segment, Channel, get_offset_datapoints
 from .preparation import recalibrate_deflection, positive
+from .progress import iter_progress
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +155,8 @@ RESULT_COLUMNS = ("young_modulus_pa","contact_point_m","adhesion_parameter_n_per
                   "adhesion_force_n","baseline_slope","baseline_offset_m")
 
 
-def analyze_static(sample_path, selection, probe, config, *, plot_callback=None, max_plot_sample=None):
+def analyze_static(sample_path, selection, probe, config, *, plot_callback=None, max_plot_sample=None,
+                   progress_callback=None):
     config.validate()
     if max_plot_sample is not None and (isinstance(max_plot_sample, bool) or
             not isinstance(max_plot_sample, (int, np.integer)) or max_plot_sample < 0):
@@ -171,7 +173,7 @@ def analyze_static(sample_path, selection, probe, config, *, plot_callback=None,
                             fit_direction=config.fit_direction,static_status="unprocessed",failure_reason="",
                             **dict.fromkeys(RESULT_COLUMNS,0.)))
     plotted = 0
-    for index in selection.point_indices:
+    for index in iter_progress(selection.point_indices, progress_callback):
         plot_data = {} if plot_callback is not None and (max_plot_sample is None or plotted < max_plot_sample) else None
         try:
             waves = []

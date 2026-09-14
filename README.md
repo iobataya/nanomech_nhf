@@ -5,7 +5,8 @@ Nanosurf AFMのNHFファイルから、静的ヤング率と周波数ごとの�
 
 ## 実行環境と起動
 
-Python 3.12以上が必要です。実行時の依存ライブラリは `nanosurf`、`matplotlib`、`numpy`、`scipy`、`pandas` です。
+Python 3.12以上が必要です。実行時の依存ライブラリは `nanosurf>=2.0.0`、`matplotlib`、`numpy`、`scipy`、`pandas` です。
+`nanosurf.utils` の配置が1.x系と異なるため、nanosurf 2.0.0以上を使用してください。
 テストには `pytest` と `Pillow` も使用します。
 
 以下の例はリポジトリのルートで、必要なライブラリが入ったconda環境 `nanosurf` を使用します。
@@ -22,6 +23,55 @@ Windowsでは環境内の `python.exe` を直接指定するだけでなく、co
 
 起動入口はルートの `main.py` で、`nanomech.cli.main()` を呼び出します。
 現在、`python -m nanomech` 用の入口や、インストール時の `nanomech` コマンド登録はありません。
+
+## CLI・GUI共通API
+
+`nanomech/requests.py` に解析条件の `VeaRequest`、`ExcitationFitRequest`、
+プローブ定数の `ProbeOverrides` を定義しています。静的解析条件は既存の `StaticConfig` を再利用します。
+CLIは入力をこれらのdataclassに変換し、`nanomech/workflows.py` の
+`run_vea()` / `run_excitation_fit()` で解析・保存を実行します。
+戻り値は `nanomech/results.py` の結果dataclassで、状態・出力先などを保持します。
+終了コードへの変換はCLI側が担当します。
+
+```python
+from pathlib import Path
+from nanomech.requests import VeaRequest
+from nanomech.workflows import run_vea
+
+result = run_vea(VeaRequest(
+    sample=Path("sample.nhf"),
+    calibration=Path("calibration.nhf"),
+    output=Path("results"),
+    max_count=4,
+))
+print(result.status, result.output_dir)
+```
+
+共通APIは同期実行で、例外は呼び出し元に返します。`config_path` は設定の出典記録・
+コピー用であり、API内で設定を読み込む指定ではありません。条件はリクエストに設定してください。
+`probe` は明示指定、`probe_config` は設定ファイル由来の値で、前者を優先します。
+`probe_source` の既定値は `API`、CLIでは `CLI`、GUIでは `GUI` を指定できます。
+dry-runでも校正キャッシュは更新され、校正PNGを指定した場合は出力先が作成されます。
+
+`run_vea(request, progress_callback=callback)` で段階ごとの進捗を取得できます。
+コールバックには `AnalysisProgress(stage, completed, total)` が渡り、`percent` で進捗率を取得できます。
+`total` と `percent` が `None` の段階（保存など）は点数進捗の対象外です。
+点数は失敗・スキップを含む処理済みの選択点数であり、成功点数ではありません。
+通知は解析を実行しているスレッドから同期的に呼ばれます。GUIはQtシグナルで画面に伝達します。
+
+Qt6 GUIの配置先は `nanomech_gui/`、GUI専用テストの配置先は `tests_gui/` です。
+GUIには `VEA` と `excitation-fit` の2つのタブがあります。`excitation-fit` ではNHFファイルを
+選択してフィッティングを開始すると、0～5次の係数をテーブルに表示します。計算はバックグラウンドで
+実行し、エラーはタブ内に表示します。excitation-fitの結果ファイルの保存は行いません。
+`VEA` ではFiles、Analysis Range、プローブ情報、Static、Dynamicの各欄で条件を指定し、
+「フィッティングを開始」または「Dry-Run」を実行できます。VEAの結果は指定した保存先へ出力します。
+タブ上部の「解析設定の読み込み」でTOML／JSONを読み込み、対応するタブの解析条件を更新できます。
+未指定項目は既定値に戻り、読み込みだけでは解析を開始しません。TOMLの相対パスは設定ファイル基準です。
+`pip install -e ".[gui]"` でGUI用の依存を追加し、
+`python -m nanomech_gui` または `nanomech-gui` で起動できます。
+Qt関連コードはGUI側に限定し、CLIのみのインストールにはQtは不要です。
+GUI右上の「Language / 言語」で日本語とEnglishを切り替えられます。
+解析条件・選択ファイル・計算結果を保持したまま、両タブと進捗表示を更新します。
 
 ## VEA解析を実行する
 

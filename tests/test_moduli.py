@@ -53,9 +53,14 @@ def test_table_preserves_unprocessed_and_failed():
     fit = SineFitResult(1e-10,500,0,0,0)
     prep = SimpleNamespace(frequencies_hz=(500.,),fits={"deflection":[fit],"indentation":[fit]},
                             probe={"spring_constant":ProbeValue(.08,"N/m","test")})
-    result,status = calculate_moduli(frame,static,prep,StaticConfig())
+    # Interleave two frequency rows per point; count points only after both rows.
+    frame = pd.concat([frame, frame], ignore_index=True)
+    updates = []
+    result,status = calculate_moduli(frame,static,prep,StaticConfig(),
+                                    progress_callback=lambda done, total: updates.append((done, total)))
+    assert updates == [(0, 2), (1, 2), (2, 2)]
     assert status == "partial_failure"
-    assert result.modulus_status.tolist() == ["success","unprocessed","skipped_fit_failed"]
+    assert result.modulus_status.tolist() == ["success","unprocessed","skipped_fit_failed"] * 2
     assert result.storage_modulus_pa.iloc[1] == 0
     assert np.isnan(result.storage_modulus_pa.iloc[2])
     assert result.young_modulus_pa.iloc[0] == 1e6

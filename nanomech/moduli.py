@@ -60,7 +60,25 @@ def hertz_moduli(ds, ins, dr, ir, indentation_dc, spring_constant, radius, nu,
     return storage,loss,loss/storage,""
 
 
-def calculate_moduli(dynamic_table, static_table, preparation, config, *, excitation="Piezo", correct_drag=True):
+def _progress_rows(table, callback):
+    """Report a point only after all its frequency rows have been processed."""
+    if callback is None:
+        yield from table.itertuples()
+        return
+    remaining = table.loc[table.vea_status != "unprocessed", "point_index"].value_counts().to_dict()
+    total, completed = len(remaining), 0
+    callback(0, total)
+    for row in table.itertuples():
+        yield row
+        if row.vea_status != "unprocessed":
+            remaining[row.point_index] -= 1
+            if remaining[row.point_index] == 0:
+                completed += 1
+                callback(completed, total)
+
+
+def calculate_moduli(dynamic_table, static_table, preparation, config, *, excitation="Piezo", correct_drag=True,
+                     progress_callback=None):
     """Keep all point/frequency rows and diagnostics; never refit input data."""
     if type(correct_drag) is not bool:
         raise ValueError("correct_drag must be boolean")
@@ -83,7 +101,7 @@ def calculate_moduli(dynamic_table, static_table, preparation, config, *, excita
         return fit.amplitude*np.exp(1j*fit.phase_rad)
     reference_d = [complex_fit(fit) for fit in preparation.fits["deflection"]]
     reference_i = [complex_fit(fit) for fit in preparation.fits["indentation"]]
-    for row in table.itertuples():
+    for row in _progress_rows(table, progress_callback):
         if row.vea_status == "unprocessed":
             continue
         if row.vea_status != "success":

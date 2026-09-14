@@ -14,13 +14,20 @@ classifiers = [
   "Development Status :: 4 - Beta",
   "Programming Language :: Python"
 ]
-dependencies = ["nanosurf", "matplotlib", "numpy", "scipy", "pandas"]
+dependencies = ["nanosurf>=2.0.0", "matplotlib", "numpy", "scipy", "pandas"]
 requires-python = ">=3.12"
+
+[project.optional-dependencies]
+gui = ["PySide6>=6,<7"]
+
+[project.gui-scripts]
+nanomech-gui = "nanomech_gui.app:main"
+
 [project.urls]
 Repository = "https://github.com/iobataya/nanomech_nhf"
 
 [tool.setuptools]
-packages = { find = { exclude = ["tests"] } }
+packages = { find = { include = ["nanomech", "nanomech.*", "nanomech_gui", "nanomech_gui.*"], exclude = ["tests", "tests.*", "tests_gui", "tests_gui.*"] } }
 
 [tool.pytest.ini_options]
 log_cli = true

@@ -107,7 +107,7 @@ def test_real_calibration_preview(cache_dir, monkeypatch):
     path = Path(__file__).resolve().parents[1] / "test-data-large/VEA-500-5k-calibration.nhf"
     if not path.exists():
         pytest.skip("Local calibration NHF unavailable")
-    monkeypatch.setattr("nanomech.vea_command.select_sample_points", lambda *a, **k: select_points(1,1))
+    monkeypatch.setattr("nanomech.workflows.select_sample_points", lambda *a, **k: select_points(1,1))
     sample = path.with_name("VEA-500-5k-sample.nhf")
     if not sample.exists():
         pytest.skip("Local sample NHF unavailable")
@@ -117,5 +117,5 @@ def test_real_calibration_preview(cache_dir, monkeypatch):
 
 
 def test_cli_missing_calibration_fails(cache_dir, monkeypatch):
-    monkeypatch.setattr("nanomech.vea_command.select_sample_points", lambda *a, **k: select_points(1,1))
+    monkeypatch.setattr("nanomech.workflows.select_sample_points", lambda *a, **k: select_points(1,1))
     assert main(["vea", "--sample", "unused.nhf", "--dry-run"]) == 1

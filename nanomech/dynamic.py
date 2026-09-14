@@ -8,6 +8,7 @@ from nanomech.nm_io import load_nhf_file, Segment, Channel, SweepConfig
 from .static import read_point_channel
 from .preparation import recalibrate_deflection
 from .excitation import demodulate_signal, SineFitResult
+from .progress import iter_progress
 
 logger = logging.getLogger(__name__)
 FIT_CHANNELS = ("deflection", "indentation", "position_z")
@@ -71,7 +72,8 @@ def fit_dynamic_point(time, raw_deflection, z, meta, deflection_unit, attributes
     return rows
 
 
-def analyze_dynamic(sample_path, selection, probe, static_table, frequencies, *, plot_callback=None, max_plot_sample=None):
+def analyze_dynamic(sample_path, selection, probe, static_table, frequencies, *, plot_callback=None, max_plot_sample=None,
+                    progress_callback=None):
     measurement = load_nhf_file(sample_path)
     segment = measurement.segment[Segment.VEA]
     required = (Channel.TIME,Channel.DEFLECTION,Channel.Z_POSITION,Channel.SAMPLER_META)
@@ -91,7 +93,7 @@ def analyze_dynamic(sample_path, selection, probe, static_table, frequencies, *,
         table[key] = "unprocessed"
     table["failure_reason"] = ""
     plotted = 0
-    for index in selection.point_indices:
+    for index in iter_progress(selection.point_indices, progress_callback):
         rows = slice(index*count,(index+1)*count-1)
         static_result = static_table.iloc[index]
         if static_result.static_status != "success":

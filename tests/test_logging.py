@@ -12,8 +12,8 @@ from nanomech.selection import select_points
 
 @pytest.fixture(autouse=True)
 def restore_root_level(monkeypatch):
-    monkeypatch.setattr("nanomech.vea_command.load_calibration", lambda path: None)
-    monkeypatch.setattr("nanomech.vea_command.prepare_calibration", lambda *a, **k: None)
+    monkeypatch.setattr("nanomech.workflows.load_calibration", lambda path: None)
+    monkeypatch.setattr("nanomech.workflows.prepare_calibration", lambda *a, **k: None)
     level = logging.getLogger().level
     yield
     logging.getLogger().setLevel(level)
@@ -24,7 +24,7 @@ def restore_root_level(monkeypatch):
 @pytest.mark.parametrize("options,expected", [([], "crop_area=ALL, max_count=ALL"),
     (["--crop_area", "0,0:1,1", "--max_count", "3"], "crop_area=0,0:1,1, max_count=3")])
 def test_debug_selection(before, after, options, expected, monkeypatch, caplog):
-    monkeypatch.setattr("nanomech.vea_command.select_sample_points",
+    monkeypatch.setattr("nanomech.workflows.select_sample_points",
                         lambda *args, **kwargs: select_points(2, 2, **kwargs))
     with caplog.at_level(logging.DEBUG):
         assert main(before + ["vea", "--sample", "unused.nhf", "--dry-run"] + after + options) == 0
@@ -36,7 +36,7 @@ def test_debug_effective_config(tmp_path, monkeypatch, caplog):
     config = tmp_path / "vea.json"
     config.write_text(json.dumps({"schema_version": 1, "command": "vea", "sample": "unused.nhf",
                                  "crop_area": "0,0:1,1", "max_count": 4}))
-    monkeypatch.setattr("nanomech.vea_command.select_sample_points",
+    monkeypatch.setattr("nanomech.workflows.select_sample_points",
                         lambda *args, **kwargs: select_points(2, 2, **kwargs))
     with caplog.at_level(logging.DEBUG):
         assert main(["vea", "--config", str(config), "--max_count", "2", "--dry-run", "--log-level", "DEBUG"]) == 0
@@ -45,7 +45,7 @@ def test_debug_effective_config(tmp_path, monkeypatch, caplog):
 
 @pytest.mark.parametrize("level", ["INFO", "WARNING", "ERROR", "CRITICAL"])
 def test_level_filters_debug(level, monkeypatch, caplog):
-    monkeypatch.setattr("nanomech.vea_command.select_sample_points",
+    monkeypatch.setattr("nanomech.workflows.select_sample_points",
                         lambda *args, **kwargs: select_points(2, 2, **kwargs))
     with caplog.at_level(logging.DEBUG):
         assert main(["vea", "--sample", "unused.nhf", "--dry-run", "--log-level", level]) == 0

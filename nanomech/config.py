@@ -1,5 +1,4 @@
 """Validated VEA file settings; explicit CLI arguments always take precedence."""
-import argparse
 import json
 from pathlib import Path
 import tomllib
@@ -31,14 +30,20 @@ def read_config(path):
         return tomllib.load(stream) if path.suffix.lower() == ".toml" else json.loads(stream.read().decode("utf-8"))
 
 
-def apply_vea_config(args, parser, command="vea"):
-    if not args.config:
-        args.file_config = {}
-        return
-    path = args.config
+def load_settings(path, command=None):
+    """Read validated settings shared by CLI and GUI, without starting analysis.
+
+    TOML paths are relative to the settings file; JSON preserves legacy paths.
+    Missing options are omitted so each interface can apply its defaults.
+    """
+    path = Path(path)
     is_toml = path.suffix.lower() == ".toml"
     data = read_config(path)
-    if not isinstance(data, dict) or data.get("schema_version") != 1 or data.get("command") != command:
+    selected = data.get("command") if isinstance(data, dict) else None
+    if not isinstance(selected, str) or selected not in ("vea", "excitation-fit"):
+        raise ValueError("Config command must be excitation-fit or vea")
+    command = selected if command is None else command
+    if data.get("schema_version") != 1 or selected != command:
         raise ValueError(f"Config requires schema_version=1 and command={command}")
     sections = SECTIONS if command == "vea" else {"cli": {"input", "output", "log_level"}}
     settings = {}
@@ -62,25 +67,52 @@ def apply_vea_config(args, parser, command="vea"):
                 add(option, setting)
         else:
             add(key, value)
-    actions = {action.dest: action for action in parser._actions}
+    paths = {"sample", "calibration", "output", "input"}
+    booleans = {"dry_run", "plot_sample", "plot_calibration", "correct_drag"}
+    integers = {"max_count", "max_plot_sample"}
+    floats = {"tip_radius", "cone_half_angle", "poisson_ratio", "sensitivity", "spring_constant",
+              "baseline_start", "baseline_end"}
+    choices = {
+        "excitation": ("auto", "Piezo", "CleanDrive"),
+        "fit_direction": ("Advance", "Retract"),
+        "log_level": ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"),
+    }
     for key, value in settings.items():
-        action = actions[key]
-        if isinstance(action, argparse.BooleanOptionalAction):
+        if key in booleans:
             valid = type(value) is bool
-        elif action.type is int:
+        elif key in integers:
             valid = type(value) is int
-        elif action.type is float:
+        elif key in floats:
             valid = type(value) in (int, float)
         else:
             valid = isinstance(value, str)
         if not valid:
             raise ValueError(f"Invalid config value type for {key}: {value!r}")
-        value = action.type(value) if action.type else value
-        if action.choices and value not in action.choices:
+        if key in paths:
+            value = Path(value)
+        elif key in floats:
+            value = float(value)
+        elif key == "model":
+            from .nm_models import canonical_contact_model
+            value = canonical_contact_model(value)
+        elif key == "fit_direction":
+            value = value.capitalize()
+        elif key == "log_level":
+            value = value.upper()
+        if key in choices and value not in choices[key]:
             raise ValueError(f"Invalid config value for {key}: {value!r}")
         if is_toml and isinstance(value, Path) and not value.is_absolute():
             value = (path.resolve().parent / value).resolve()
         settings[key] = value
+    return command, settings
+
+
+def apply_vea_config(args, parser, command="vea"):
+    """Apply shared file settings while preserving explicit CLI overrides."""
+    if not args.config:
+        args.file_config = {}
+        return
+    _, settings = load_settings(args.config, command)
     args.file_config = settings
     for key, value in settings.items():
         # Preserve probe provenance for the existing resolution pipeline.

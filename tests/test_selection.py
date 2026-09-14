@@ -61,8 +61,8 @@ def test_large_sample_does_not_load_waveforms(monkeypatch):
 
 @pytest.mark.parametrize("option", ["--max_count", "--max-count", "--max_points", "--max-points"])
 def test_cli_config_override(option, tmp_path, caplog, monkeypatch):
-    monkeypatch.setattr("nanomech.vea_command.load_calibration", lambda path: None)
-    monkeypatch.setattr("nanomech.vea_command.prepare_calibration", lambda *a, **k: None)
+    monkeypatch.setattr("nanomech.workflows.load_calibration", lambda path: None)
+    monkeypatch.setattr("nanomech.workflows.prepare_calibration", lambda *a, **k: None)
     config = tmp_path/"vea.json"
     config.write_text(json.dumps({"schema_version":1,"command":"vea","sample":str(representative()),
                                   "max_count":8,"crop_area":"0,0:1,1"}))
