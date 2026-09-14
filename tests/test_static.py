@@ -9,7 +9,7 @@ from nanomech.static import StaticConfig, fit_static_point, read_point_channel, 
 from nanomech.preparation import resolve_probe
 from nanomech.selection import select_sample_points
 from nanomech.cli import main
-from nm_io import load_nhf_file, Segment, Channel
+from nanomech.nm_io import load_nhf_file, Segment, Channel
 
 
 @pytest.mark.parametrize("direction",["Advance","Retract"])
@@ -97,7 +97,7 @@ def test_invalid_config():
 
 
 def test_hertz_scaled_jacobian():
-    from nm_models import HertzSphere
+    from nanomech.nm_models import HertzSphere
     model = HertzSphere(5e-9,.5,residual_scale=1e-9)
     model.param_scales = np.array([1e6,1e-7])
     p = np.array([2.,.1])

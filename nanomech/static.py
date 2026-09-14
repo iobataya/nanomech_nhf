@@ -5,9 +5,9 @@ import logging
 
 import numpy as np
 import pandas as pd
-from nm_models import HertzSphere, create_contact_model, canonical_contact_model
+from nanomech.nm_models import HertzSphere, create_contact_model, canonical_contact_model
 
-from nm_io import load_nhf_file, Segment, Channel, get_offset_datapoints
+from nanomech.nm_io import load_nhf_file, Segment, Channel, get_offset_datapoints
 from .preparation import recalibrate_deflection, positive
 
 logger = logging.getLogger(__name__)

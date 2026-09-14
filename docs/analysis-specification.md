@@ -15,8 +15,8 @@
 調査元:
 
 - [旧スクリプト](../v11Paul/demo_VEA_analysis_v11_evalCoeffsPolynom.py): import_data、demodulate_signal、evaluate_spec、evaluate_moduli、eval_coeffs_func、メイン処理。
-- [nm_io.py](../nm_io.py): 読み込み、測定データ、SweepConfig、区間取得。
-- [nm_models.py](../nm_models.py): NanomechModel、Linear、Sine、HertzSphere。
+- [nm_io.py](../nanomech/nm_io.py): 読み込み、測定データ、SweepConfig、区間取得。
+- [nm_models.py](../nanomech/nm_models.py): NanomechModel、Linear、Sine、HertzSphere。
 - [統合テスト](../tests/test_nm_integration.py)、[E2Eテスト](../tests/test_nm_end2end.py): 全解析の期待数値を保証する状態には至っていない。
 
 ## 2. コマンドとモデルは別の拡張単位
@@ -345,7 +345,7 @@ DMTの残差選択は旧ignore_baselineとは異なり全点を評価する。�
 
 2026-09-14 確定: calibrationおよびsample VEAの正弦波フィットはドリフトを厳密に0へ
 固定し、残差と解析ヤコビアンを信号振幅スケールで正規化する。
-`nm_models.FixedDriftSine` が `Sine` の式・ヤコビアンと基底クラスのパラメータ
+`nanomech.nm_models.FixedDriftSine` が `Sine` の式・ヤコビアンと基底クラスのパラメータ
 スケーリングを利用する。振幅・周波数・位相・DCの4変数のみを最適化する。
 中央40%、周波数範囲0.999～1.001倍は維持し、返却位相は従来のphi-1表記に変換する。
 残差ノルムは正規化前の信号単位で記録する。sample動的解析は今後この共通復調を使用する。
@@ -365,7 +365,7 @@ DMTの残差選択は旧ignore_baselineとは異なり全点を評価する。�
 | DMT_Cone | E*tan(theta)*d**2/(1-nu**2) - 2*pi*gamma*d/tan(theta) | E,x0,gamma | theta,nu | 未実装 |
 | 励振5次多項式 | sum(ci*log10(f)**i), i=0..5 | c0..c5 | 正規化係数 | 未実装 |
 
-- nm_io.ContactModelNameのDMT_Cylinder、DMT_Tipは名前のみ。旧コードの5モデルとは別の追加候補で、対応済みとは扱わない。
+- nanomech.nm_io.ContactModelNameのDMT_Cylinder、DMT_Tipは名前のみ。旧コードの5モデルとは別の追加候補で、対応済みとは扱わない。
 - HertzSphereはignore_adhesionを定数に保持するが、現在のresidualsでは使用していない。旧モデルと同じ残差選択ではない。
 - Sineの振幅・傾き・offsetの単位は入力チャネルに依存する。現在のメタデータのN固定を汎用仕様にしない。
 - モデル登録は「識別名、変数と単位、必要定数、モデル生成」を扱う。接触形状に応じたVEA係数も明示的に対応付ける。
@@ -490,7 +490,7 @@ static初回実装の検証記録: Hertz球モデルをSI単位で実装し、Ad
 この差異を許容誤差の緩和や旧結果への調整で隠さない。
 static結果は1点1行の `static_results.csv` とし、dynamicの1点1周波数1行とは分離する。
 
-2026-09-14: static Hertz計算を `nm_models.HertzSphere` に統合。
+2026-09-14: static Hertz計算を `nanomech.nm_models.HertzSphere` に統合。
 解析ヤコビアン、基底クラスのパラメータスケーリング、同一係数による残差・ヤコビアン
 正規化を使用する。既存の正の力の点選択・初期値・制約・最大評価回数2000を維持する。
 2 kPa／2 MPa／2 GPaの合成曲線（Advance／Retract）と実sample2点・両方向で検証済み。

@@ -3,9 +3,9 @@ import json
 import logging
 from pathlib import Path
 import numpy as np
-from nm_io import load_nhf_file
-from nm_gwy import NmGwyContainer
-from gwy_export import GwySizeInfo, savedata_gwy
+from nanomech.nm_io import load_nhf_file
+from nanomech.nm_gwy import NmGwyContainer
+from nanomech.gwy_export import GwySizeInfo, savedata_gwy
 
 STATIC = (
     ("contact_point_m", "Contact Point", "m"),

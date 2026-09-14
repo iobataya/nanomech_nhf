@@ -1,4 +1,4 @@
-# nm_models.Sine calibration verification
+# nanomech.nm_models.Sine calibration verification
 
 Date: 2026-09-14. Production fitting code was not changed.
 

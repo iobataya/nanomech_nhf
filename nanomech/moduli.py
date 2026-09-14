@@ -3,8 +3,8 @@ import json
 import logging
 import numpy as np
 
-from nm_io import load_nhf_file, Segment, Attribute
-from nm_models import canonical_contact_model
+from nanomech.nm_io import load_nhf_file, Segment, Attribute
+from nanomech.nm_models import canonical_contact_model
 
 logger = logging.getLogger(__name__)
 MODULUS_COLUMNS = ("storage_modulus_pa", "loss_modulus_pa", "loss_tangent")

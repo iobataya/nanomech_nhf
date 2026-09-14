@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 from typing import List
 import pathlib
-from gwy_export import GwySizeInfo, savedata_gwy
+from nanomech.gwy_export import GwySizeInfo, savedata_gwy
 
 class NmGwyContainer:
     """Two-dimensional container of result values (np.float64).

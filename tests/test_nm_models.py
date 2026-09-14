@@ -11,8 +11,8 @@ from nanosurf.utils.io import nhf_reader, fileutil
 
 # Ensure repository root is on sys.path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from nm_models import NanomechModel, Linear, Sine
-from gwy_export import savedata_gwy
+from nanomech.nm_models import NanomechModel, Linear, Sine
+from nanomech.gwy_export import savedata_gwy
 
 logger = logging.getLogger(__name__)
 logging.getLogger('matplotlib').setLevel(logging.WARNING)

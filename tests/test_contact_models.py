@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from nm_models import CONTACT_MODELS, create_contact_model
+from nanomech.nm_models import CONTACT_MODELS, create_contact_model
 from nanomech.static import StaticConfig,fit_contact
 
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from nm_io import load_nhf_file, Attribute, Segment, Channel, SweepConfig, get_offset_datapoints
+from nanomech.nm_io import load_nhf_file, Attribute, Segment, Channel, SweepConfig, get_offset_datapoints
 from .excitation import demodulate_signal
 
 logger = logging.getLogger(__name__)

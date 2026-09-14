@@ -5,7 +5,7 @@ import logging
 import numpy as np
 import pytest
 
-from nm_io import Attribute, load_nhf_file
+from nanomech.nm_io import Attribute, load_nhf_file
 from nanomech.calibration import CalibrationInput
 from nanomech.preparation import resolve_probe, recalibrate_deflection, prepare_calibration
 from nanomech.excitation import demodulate_signal
@@ -79,7 +79,7 @@ def test_normalized_sine_recovers_small_signals(amplitude):
 
 
 def test_fixed_drift_analytic_jacobian():
-    from nm_models import FixedDriftSine
+    from nanomech.nm_models import FixedDriftSine
     model = FixedDriftSine(1e-9)
     model.param_scales = np.array([1e-9,500,1,1e-9])
     p = np.array([2.,1.,.6,.2])

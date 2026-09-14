@@ -63,7 +63,7 @@ def test_binary_maps_and_geometry(tmp_path,monkeypatch):
 
 
 def test_single_pixel_size(tmp_path):
-    from gwy_export import savedata_gwy,GwySizeInfo
+    from nanomech.gwy_export import savedata_gwy,GwySizeInfo
     path=tmp_path/"one.gwy"
     assert savedata_gwy(path,GwySizeInfo(1e-6,2e-6),[np.zeros((1,1))],["one"],["Pa"])
     field=decode(path.read_bytes())["/0/data"]

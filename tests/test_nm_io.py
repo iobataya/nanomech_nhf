@@ -1,20 +1,22 @@
 import os
 import sys
 import numpy as np
+import matplotlib.pyplot as plt
 
 # Ensure repository root is on sys.path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from nm_gwy import NmGwyContainer, GwySizeInfo
+from nanomech.nm_gwy import NmGwyContainer, GwySizeInfo
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), 'results')
 OUTPUT_FIGS_DIR = os.path.join(os.path.dirname(__file__), 'figs')
 DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
+FORCEMAP_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'test-data-large', 'Forcemap-50x50.nhf'))
 def ensure_output_dir():
     if not os.path.exists(OUTPUT_DIR):
         os.makedirs(OUTPUT_DIR)
 
-from nm_io import *
+from nanomech.nm_io import *
 
 NHFDataset: TypeAlias = nhf_reader.NHFDataset
 NHFSegment: TypeAlias = nhf_reader.NHFSegment
@@ -22,7 +24,7 @@ NHFMeasurement: TypeAlias = nhf_reader.NHFMeasurement
 
 def test_load_nsf_measurement():
     """Test loading of a .nsf file."""
-    test_file = Path(DATA_DIR) / Path('Forcemap-5x5.nhf')
+    test_file = Path(FORCEMAP_FILE)
 
     nsf_measurement = NSF_Measurement(test_file)
     assert nsf_measurement is not None
@@ -31,7 +33,7 @@ def test_load_nsf_measurement():
 
 def test_load_nhf_file():
     """Test loading of a .nhf file."""
-    test_file = os.path.join(DATA_DIR, 'Forcemap-5x5.nhf')
+    test_file = FORCEMAP_FILE
 
     nhf_file = nhf_reader.NHFFileReader(verbose=True)
     assert nhf_file.read(test_file)
@@ -41,7 +43,7 @@ def test_load_nhf_file():
 
 def test_load_nhf_forcemapping():
     """Test loading of a .nhf file."""
-    test_file = os.path.join(DATA_DIR, 'Forcemap-5x5.nhf')
+    test_file = FORCEMAP_FILE
 
     # NHFMeasurement is a dataclass with attributes: channel, segment, and metadata.
     measurement = load_nhf_file(test_file)
@@ -142,7 +144,7 @@ def test_load_nhf_single_forcecurve_file():
 
 def test_coordinate_to_XY_index():
     """Test conversion of coordinates to XY index."""
-    test_file = os.path.join(DATA_DIR, 'Forcemap-5x5.nhf')
+    test_file = FORCEMAP_FILE
     measurement = load_nhf_file(test_file)
     assert measurement is not None
 
@@ -170,7 +172,7 @@ def test_is_single_point():
     meas1 = load_nhf_file(single_force_curve_path)
     assert meas1 is not None
     assert is_single_point(meas1)
-    forcemap_path = os.path.join(DATA_DIR, 'Forcemap-5x5.nhf')
+    forcemap_path = FORCEMAP_FILE
     meas2 = load_nhf_file(forcemap_path)
     assert meas2 is not None
     assert not is_single_point(meas2)
@@ -182,7 +184,7 @@ def test_get_first_dataset():
     dataset1 = get_first_dataset(meas1)
     assert dataset1 is not None
     assert isinstance(dataset1, NHFDataset)
-    forcemap_path = os.path.join(DATA_DIR, 'Forcemap-5x5.nhf')
+    forcemap_path = FORCEMAP_FILE
     meas2 = load_nhf_file(forcemap_path)
     assert meas2 is not None
     logger.debug(f"Summary of forcemap measurement: {summary_nhf_measurement(meas2, show_channel=True, show_segment=True, show_attribute=True)}    ")
@@ -192,7 +194,7 @@ def test_get_first_dataset():
 
 def test_get_offset_datapoints():
     """Test the calculation of offset data points."""
-    forcemap_path = os.path.join(DATA_DIR, 'Forcemap-5x5.nhf')
+    forcemap_path = FORCEMAP_FILE
     meas = load_nhf_file(forcemap_path)
     assert meas is not None
 
@@ -207,7 +209,7 @@ def test_get_offset_datapoints():
 
 def test_datapoints_between_points():
     """Test the calculation of data points between two values."""
-    forcemap_path = os.path.join(DATA_DIR, 'Forcemap-5x5.nhf')
+    forcemap_path = FORCEMAP_FILE
     meas = load_nhf_file(forcemap_path)
     assert meas is not None
 

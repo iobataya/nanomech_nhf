@@ -7,7 +7,7 @@ from PIL import Image
 from nanomech.cli import main
 from nanomech.static import StaticConfig
 from nanomech.sample_plot import plot_static_sample
-from nm_models import HertzSphere
+from nanomech.nm_models import HertzSphere
 
 
 def test_overlay_and_result_text(tmp_path,monkeypatch):

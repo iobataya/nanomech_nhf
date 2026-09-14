@@ -2,7 +2,7 @@
 from pathlib import Path
 import json
 import numpy as np
-import nm_io as nhf
+import nanomech.nm_io as nhf
 from .excitation import fit_excitation, demodulate_amplitudes
 
 

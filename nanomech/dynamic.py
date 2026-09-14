@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from types import SimpleNamespace
 
-from nm_io import load_nhf_file, Segment, Channel, SweepConfig
+from nanomech.nm_io import load_nhf_file, Segment, Channel, SweepConfig
 from .static import read_point_channel
 from .preparation import recalibrate_deflection
 from .excitation import demodulate_signal, SineFitResult

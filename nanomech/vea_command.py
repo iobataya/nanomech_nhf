@@ -20,7 +20,7 @@ def configure_parser(parser):
     parser.add_argument("--calibration", type=Path,
                         help="Calibration NHF; omitted uses .last_calibration.nhf beside main.py")
     parser.add_argument("--config", type=Path)
-    from nm_models import canonical_contact_model, CONTACT_MODELS
+    from nanomech.nm_models import canonical_contact_model, CONTACT_MODELS
     parser.add_argument("--model",type=canonical_contact_model,choices=CONTACT_MODELS)
     parser.add_argument("--cone-half-angle", "--cone_half_angle",type=float,help="Cone/pyramid half angle in degrees")
     parser.add_argument("--excitation", choices=("auto","Piezo","CleanDrive"))

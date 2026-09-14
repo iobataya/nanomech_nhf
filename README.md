@@ -77,7 +77,7 @@ amplitude, fitted frequency, phase, DC and residual norm for Deflection,
 Indentation and Position Z at each frequency. Phase is unwrapped across the sweep.
 Calibration/sample sweep mismatches and calibration fit failures abort preparation.
 
-Calibration and future sample VEA sine fits use `nm_models.FixedDriftSine`:
+Calibration and future sample VEA sine fits use `nanomech.nm_models.FixedDriftSine`:
 drift is exactly zero, and residuals plus analytic Jacobians are normalized by
 the segment half peak-to-peak amplitude. Parameter scaling is also applied.
 Zero-amplitude segments fail rather than dividing by zero. Returned phases retain
@@ -105,7 +105,7 @@ Options (also config keys with underscores):
 The baseline is fitted against Z over the specified fraction of Advance samples
 and subtracted from both directions. Force is in N, indentation in m and modulus
 in Pa; fitting uses positive-force data with normalized parameters and residuals.
-Static fitting delegates to `nm_models.HertzSphere.fit`, using its analytic
+Static fitting delegates to `nanomech.nm_models.HertzSphere.fit`, using its analytic
 Jacobian and parameter scaling. Its optional `residual_scale` normalizes residuals
 and Jacobians together (default 1 preserves other callers). The iteration limit,
 contact bounds and physical output units are retained.

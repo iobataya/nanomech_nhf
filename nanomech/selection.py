@@ -53,7 +53,7 @@ def select_points(width, height, *, max_count=None, crop_area=None,
 
 def select_sample_points(source, *, max_count=None, crop_area=None):
     """Inspect the first measurement metadata without loading waveform channels."""
-    from nm_io import load_nhf_file, Segment, Channel
+    from nanomech.nm_io import load_nhf_file, Segment, Channel
     measurement = load_nhf_file(source)
     size = measurement.attribute.get("rect_axis_size")
     if size is None or len(size) != 2:

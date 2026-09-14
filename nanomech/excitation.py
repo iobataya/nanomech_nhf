@@ -90,7 +90,7 @@ def demodulate_signal(time, signal, frequencies, boundaries, *, normalize=True, 
         initial = [(y.max() - y.min()) / 2, f, .9*np.pi, (y.max() + y.min()) / 2]
         tf, yf = t[margin:len(t)-margin], y[margin:len(y)-margin]
         if normalize:
-            from nm_models import FixedDriftSine
+            from nanomech.nm_models import FixedDriftSine
             scale = initial[0]
             if scale <= 0:
                 raise ValueError(f"No oscillation amplitude at {f} Hz")

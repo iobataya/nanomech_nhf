@@ -7,7 +7,7 @@ from matplotlib import get_data_path
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 from matplotlib.text import Text
-from nm_models import create_contact_model, canonical_contact_model
+from nanomech.nm_models import create_contact_model, canonical_contact_model
 
 logger = logging.getLogger(__name__)
 

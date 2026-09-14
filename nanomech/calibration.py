@@ -5,7 +5,7 @@ from pathlib import Path
 import shutil
 import tempfile
 
-from nm_io import load_nhf_file, Segment, Channel
+from nanomech.nm_io import load_nhf_file, Segment, Channel
 
 logger = logging.getLogger(__name__)
 # main.py lives beside the nanomech package; this is independent of cwd.

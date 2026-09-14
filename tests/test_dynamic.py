@@ -7,7 +7,7 @@ from nanomech.dynamic import fit_dynamic_point, analyze_dynamic, FIT_COLUMNS
 from nanomech.preparation import ProbeValue, resolve_probe
 from nanomech.selection import select_sample_points
 from nanomech.static import analyze_static, StaticConfig
-from nm_io import load_nhf_file
+from nanomech.nm_io import load_nhf_file
 
 
 def synthetic():
@@ -78,7 +78,7 @@ def test_real_map_index_and_static_failure(monkeypatch):
         assert isinstance(channel.h5_dataset,np.ndarray), "Full waveform loaded"
         return original(channel,*a,**kw)
     monkeypatch.setattr(nhf_reader.NHFDataset,"read_data",guard)
-    from nm_io import SweepConfig
+    from nanomech.nm_io import SweepConfig
     result,status = analyze_dynamic(path,selection,probe,table,tuple(SweepConfig(m).freq_list))
     assert len(result) == 16384*5
     assert status == "partial_failure"
