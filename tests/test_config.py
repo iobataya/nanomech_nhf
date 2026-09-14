@@ -20,6 +20,8 @@ def test_excitation_toml_dispatch(tmp_path, monkeypatch, explicit):
     assert main((['excitation-fit'] if explicit else []) + ['--config', str(path)]) == 0
     assert seen == [tmp_path / 'input.nhf']
     assert len(list((tmp_path / 'out').glob('*/excitation_coefficients.json'))) == 1
+    copied, = (tmp_path / 'out').glob('*/input_config.toml')
+    assert copied.read_bytes() == path.read_bytes()
 
 
 @pytest.mark.parametrize('content', ['schema_version=1', 'command="unknown"', 'command=["vea"]', 'broken=['])
@@ -119,10 +121,13 @@ fit_direction="advance"
 ''')
     assert main(['--config', str(path)]) == 0
     run, = (tmp_path / 'out').iterdir()
+    assert (run / 'input_config.toml').read_bytes() == path.read_bytes()
     table = pd.read_csv(run / 'static_results.csv')
     assert table.model.iloc[0] == 'DMT_Sphere'
     assert table.young_modulus_pa.iloc[0] > 0
     assert (run / 'vea_results.csv').exists()
+    gwy, = run.glob('*.gwy')
+    assert gwy.read_bytes()[:4] == b'GWYP'
     assert (run / 'vea_fit_results.csv').exists()
     assert (run / 'calibration/calibration_deflection.png').exists()
     assert len(list((run / 'sample').glob('*.png'))) == 2

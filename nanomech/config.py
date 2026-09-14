@@ -3,6 +3,18 @@ import argparse
 import json
 from pathlib import Path
 import tomllib
+import shutil
+import logging
+
+
+def copy_run_config(source, run):
+    """Archive the original settings without colliding with result filenames."""
+    if source is None:
+        return
+    source = Path(source)
+    destination = Path(run) / ("input_config" + source.suffix)
+    shutil.copy2(source, destination)
+    logging.getLogger(__name__).info("Config copied: %s -> %s", source, destination)
 
 
 SECTIONS = {

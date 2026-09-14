@@ -260,6 +260,17 @@ python main.py vea --sample test-data-large/VEA-500-5k-sample.nhf --dry-run --lo
 ```
 # TOMLによるVEA解析設定
 
+通常のVEA解析ではCSVと同じ出力ディレクトリに `<sample名>_VEAnalysis.gwy` を自動保存します。
+追加のオプションは不要です（`--dry-run` では保存しません）。
+静的結果5チャンネル（接触位置、ヤング率、DMT Gamma、snap-in力、付着力）と、
+周波数ごとの貯蔵弾性率・損失弾性率・tan δを保存します。5周波数なら合計20チャンネルです。
+単位はそれぞれ m、Pa、N/m、N、N、Pa、Pa、無次元です。
+CSVと同じ値を使用し、未処理点は0、失敗値はNaNとGWYマスクで保持します。
+cropや点数制限を指定しても元のマップサイズを維持します。詳細な状態と失敗理由はCSVを参照してください。
+NHFのX/Y範囲とscanner offsetを同名のGWY軸に設定し、蛇行走査をXY座標へ復元して
+上下反転したラスタを保存します。軸の入れ替えは行いません。
+scanner rotationはメタデータに記録し、画像の回転・補間は行いません。
+
 VEAのcalibrationはdeflection波形から周波数を推定し、NHF設定から生成した周波数との
 相対誤差 `abs(f_fit - f_NHF) / f_NHF` が5%を超えるとエラーで停止します。
 推定時の探索範囲は設定周波数の0.5〜1.5倍で、推定周波数・誤差をINFOログに出力します。

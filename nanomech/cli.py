@@ -31,6 +31,8 @@ def excitation_execute(args):
     result, provenance = excitation_fit(source)
     run = output / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S") + "-" + uuid4().hex)
     run.mkdir(parents=True, exist_ok=False)
+    from .config import copy_run_config
+    copy_run_config(args.config, run)
     metadata = {"schema_version": 1, "command": "excitation-fit", "input": str(source.resolve()),
                 "measurement_index": 0, "point_index": 0, "amplitude_unit": "m",
                 **provenance,

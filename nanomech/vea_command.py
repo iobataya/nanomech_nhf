@@ -74,6 +74,8 @@ def execute(args):
         output = Path(args.output or config.get("output", "results"))
         run = output / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S") + "-" + uuid4().hex)
         run.mkdir(parents=True, exist_ok=False)
+        from .config import copy_run_config
+        copy_run_config(args.config, run)
     if args.plot_calibration:
         from .calibration_plot import plot_calibration
         plot_calibration(preparation, run / "calibration")
@@ -114,6 +116,10 @@ def execute(args):
                         max_count=limit,crop_area=crop,selected_count=len(selection.point_indices),
                         total_count=selection.total_count,plot_sample=args.plot_sample,
                         max_plot_sample=args.max_plot_sample)
+        from .gwyddion import export_gwyddion
+        gwy_path = run / (Path(source).stem + "_VEAnalysis.gwy")
+        metadata["gwyddion_file"] = gwy_path.name
+        export_gwyddion(gwy_path,Path(source),selection,table,moduli_table,preparation.frequencies_hz,metadata)
         (run / "run.json").write_text(json.dumps(metadata,indent=2,allow_nan=False),encoding="utf-8")
         logger.info("Static results saved: %s (status=%s)",run / "static_results.csv",static_status)
         logger.info("VEA fit results saved: %s (status=%s)",run / "vea_fit_results.csv",dynamic_status)
