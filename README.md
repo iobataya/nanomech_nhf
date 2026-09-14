@@ -1,317 +1,305 @@
 # nanomech_nhf
-Nanomechanical analysis from NHF file obtained Nanosurf AFM
 
-## Excitation coefficient CLI
+Nanosurf AFMのNHFファイルから、静的ヤング率と周波数ごとの粘弾性を解析するPython CLIです。
+入力、校正、フィッティング、CSV・Gwyddion・PNG出力までを非対話で実行します。
 
-Run in the `nanosurf` conda environment:
+## 実行環境と起動
 
-```powershell
-conda run -n nanosurf python main.py excitation-fit --input test-data-large/VEA-power-corr.nhf --output results
-```
+Python 3.12以上が必要です。実行時の依存ライブラリは `nanosurf`、`matplotlib`、`numpy`、`scipy`、`pandas` です。
+テストには `pytest` と `Pillow` も使用します。
 
-The first measurement's point zero is fitted without opening a GUI. Each run
-creates a new directory containing `excitation_coefficients.json` (c0 through c5)
-and `run.json` (input, units, calibration scale and fit diagnostics).
-The polynomial is `sum(ci * log10(frequency_Hz)**i)` for amplitude/max(amplitude).
-
-An optional `--config config.json` accepts `schema_version: 1`,
-`command: "excitation-fit"`, `input` and `output`. Explicit CLI values take
-precedence. Relative paths are resolved from the current working directory.
+以下の例はリポジトリのルートで、必要なライブラリが入ったconda環境 `nanosurf` を使用します。
 
 ```powershell
-conda run --no-capture-output -n nanosurf python -m pytest tests/test_excitation.py -q
+conda activate nanosurf
+python main.py --help
+python main.py vea --help
+python main.py excitation-fit --help
 ```
 
-Local NHF comparison tests explicitly skip when the representative input is absent.
-Additional contact models, performance optimization and GUI remain subsequent work.
+環境を有効化せず実行する場合は、`conda run --no-capture-output -n nanosurf python main.py ...` を使用します。
+Windowsでは環境内の `python.exe` を直接指定するだけでなく、conda経由で環境のDLL検索パスも設定してください。
 
-## VEA point selection preview
+起動入口はルートの `main.py` で、`nanomech.cli.main()` を呼び出します。
+現在、`python -m nanomech` 用の入口や、インストール時の `nanomech` コマンド登録はありません。
 
-```powershell
-conda run --no-capture-output -n nanosurf python main.py vea --sample test-data-large/VEA-500-5k-sample.nhf --calibration test-data-large/VEA-500-5k-calibration.nhf --max_count 4 --crop_area "0,0:1,1" --dry-run
-```
+## VEA解析を実行する
 
-`--max_count` limits the number of attempted sample points. `--crop_area`
-selects an inclusive rectangle in zero-based XY indices with the origin at the
-bottom left. Crop is applied first, then the limit in original acquisition order.
-Omitting both selects all points. Invalid or out-of-bounds selections fail.
-`--max-count`, `--max_points`, `--max-points` and `--crop-area` are aliases.
-
-Dry-run reads sample metadata, resolves probe calibration constants, and fits
-calibration point zero. It does not load sample waveforms or calculate sample
-material properties. It logs the selected count and up to 20 point indices/XY
-positions. Without `--dry-run`, static Hertz analysis runs on selected sample
-points, followed by per-frequency sample VEA sine fits and Hertz dynamic moduli.
-The shared selection retains the original map dimensions
-for future full-size result output.
-
-`--config` accepts JSON with `schema_version: 1`, `command: "vea"`, `sample`,
-`max_count` and `crop_area`. Explicit CLI options override config values.
-The old config name `max_points` is accepted, but cannot coexist with `max_count`.
-
-VEA calibration selection (also applied during `--dry-run`):
-
-- `--calibration path.nhf` always opens that file. After successful metadata
-  validation it is copied to `.last_calibration.nhf` beside `main.py`.
-- Without `--calibration`, that cached file is opened, regardless of the current
-  working directory. The cache contains the NHF itself, not a path reference.
-- Missing or invalid explicit input raises an error without falling back to the
-  cache. Missing/invalid cache also fails. The CLI returns exit code 1.
-
-DEBUG logs record the selected absolute path and whether it came from CLI or
-cache. Cache replacement is atomic and preserves the previous file if copying
-fails. These temporary files are excluded from Git. Dry-run validates metadata,
-updates the cache, and performs calibration sine fits as preparation for analysis.
-
-`--sensitivity` (m/V) and `--spring_constant` / `--spring-constant` (N/m)
-override config `sensitivity` and `spring_constant`. Each constant independently
-falls back to the sample measurement attribute, then the calibration measurement
-attribute. Missing constants and nonpositive/nonfinite values fail. Adopted values,
-units and origins are logged. Saved displacement/force channels use their original
-file calibration to recover detector volts before applying the new sensitivity;
-force is displacement times the adopted spring constant.
-
-Calibration fits use point zero, the central 40% of each frequency segment and
-the legacy sine phase convention `sin(2*pi*f*t + phase - 1)`. INFO logs report
-amplitude, fitted frequency, phase, DC and residual norm for Deflection,
-Indentation and Position Z at each frequency. Phase is unwrapped across the sweep.
-Calibration/sample sweep mismatches and calibration fit failures abort preparation.
-
-Calibration and future sample VEA sine fits use `nanomech.nm_models.FixedDriftSine`:
-drift is exactly zero, and residuals plus analytic Jacobians are normalized by
-the segment half peak-to-peak amplitude. Parameter scaling is also applied.
-Zero-amplitude segments fail rather than dividing by zero. Returned phases retain
-the legacy convention and logged residual norms retain physical signal units.
-The separate legacy-compatible excitation-fit demodulation remains unchanged.
-
-```powershell
-python main.py vea --sample test-data-large/VEA-500-5k-sample.nhf --calibration test-data-large/VEA-500-5k-calibration.nhf --sensitivity 4.438e-8 --spring_constant 0.08405063054669279 --max_count 4 --dry-run
-```
-
-## Static Young's modulus analysis
-
-```powershell
-python main.py vea --sample test-data-large/VEA-500-5k-sample.nhf --calibration test-data-large/VEA-500-5k-calibration.nhf --max_count 4 --crop_area "0,0:1,1" --output results
-```
-
-Static models are `Hertz` (default), `Sneddon`, `Pyramid`, `DMT_Sphere`, and
-`DMT_Cone`. Select with `--model`; names are case-insensitive, so `DMT_sphere`
-is accepted. `StaticConfig.model` and config JSON use the same names.
-Options (also config keys with underscores):
-`--fit-direction Advance|Retract` (default Advance), `--tip-radius` (default 5e-9 m),
-`--poisson-ratio` (default 0.5), `--baseline-start` (0.05) and `--baseline-end` (0.50).
-`--cone-half-angle` / `cone_half_angle` is the cone/pyramid half angle in degrees
-(default 15, strictly between 0 and 90). Sphere models use tip radius.
-The baseline is fitted against Z over the specified fraction of Advance samples
-and subtracted from both directions. Force is in N, indentation in m and modulus
-in Pa; fitting uses positive-force data with normalized parameters and residuals.
-Static fitting delegates to `nanomech.nm_models.HertzSphere.fit`, using its analytic
-Jacobian and parameter scaling. Its optional `residual_scale` normalizes residuals
-and Jacobians together (default 1 preserves other callers). The iteration limit,
-contact bounds and physical output units are retained.
-
-All five contact equations are implemented in `nm_models` with analytic Jacobians,
-parameter scaling and normalized residuals. DMT fits also estimate `gamma`, saved
-as `adhesion_parameter_n_per_m` in both result tables (zero for nonadhesive models).
-Under the implemented equations gamma has units N/m; this does not establish a
-physical interpretation of the legacy DMT_Cone adhesion parameter.
-For DMT, full-curve residuals and multiple initial contact positions are used.
-Unlike legacy `ignore_baseline=True`, points are not dropped dynamically when
-the contact estimate moves. This prevents a spuriously low residual from omitting
-data. Nonadhesive models continue using positive-force samples.
-
-Model selection also controls static plot names/curves and the legacy dynamic
-geometry factors (sphere for Hertz/DMT_Sphere, cone for Sneddon/DMT_Cone, pyramid
-for Pyramid). Existing legacy-comparison limitations still apply.
-
-```powershell
-python main.py vea --sample test-data-large/VEA-500-5k-sample.nhf --model DMT_sphere --max_count 4 --plot-sample
-```
-
-Each run writes `static_results.csv` via pandas, with one row per original point,
-and `run.json` with resolved settings, probe provenance and overall status. CSV
-contains point index, XY, direction, model, Young's modulus, contact position,
-residual norm, snap-in/adhesion force, baseline coefficients, status and failure
-reason. Unselected points retain zero results and `unprocessed`; failed points
-contain `NaN` and `failed`. All selected points failing returns exit code 1 after
-writing results. Partial success is recorded as `partial_failure`.
-
-The representative point-zero result is approximately 2.313 MPa, differing from
-the legacy CSV's 0.100 MPa beyond the agreed 1% tolerance. This comparison has
-not passed. The legacy fitter mixes nN input with an SI model; the new fitter
-uses consistent units and numerical scaling. Synthetic Advance/Retract curves
-with known modulus pass recovery tests. Other contact models remain subsequent work.
-
-## Calibration plots and logging
-
-For static sample overlays, add `--plot-sample`. Use `--max-plot-sample 2` to
-save at most two successful sample plots in acquisition order; omitting the limit
-plots all successfully fitted selected points. Zero saves no sample plots and
-negative values are rejected. The limit affects only plotting, not analysis or
-CSV rows. Without `--plot-sample`, the limit alone does not enable plotting.
-
-```powershell
-python main.py vea --sample test-data-large/VEA-500-5k-sample.nhf --max_count 4 --plot-sample --max-plot-sample 2 --output results
-```
-
-Sample PNGs go to `results/<run>/sample/`, for example
-`sample_point00000_Hertz_advance.png`. Each shows the fitted direction's
-baseline-corrected force (nN) versus indentation (nm), the existing fitted curve,
-Young's modulus, contact position, residual norm, radius and Poisson ratio.
-The indentation coordinate retains its contact offset, matching the fitted data.
-No waveform reread or refit is performed for plotting. Failed/unprocessed points
-have no fitted plot and do not consume the plot limit. `--dry-run` skips sample
-analysis and sample plots. Currently only the implemented static Hertz model is
-plotted for static analysis. The same option also saves dynamic deflection versus
-time with fitted sine curves, stacking all frequencies vertically in one image
-per point, matching the calibration layout. Failed deflection fits are labeled.
-`--max-plot-sample` applies independently to static and dynamic point images;
-it does not limit the number of frequency panels or analysis points.
-
-Both outputs use the shared naming rule
-`sample_point{index}_{model}_{segment}.png`, for example
-`sample_point00000_Hertz_advance.png` and `sample_point00000_sine_VEA.png`.
-Index width is `len(str(measurement_total_count))`, regardless of crop/count
-selection. `plot_static_sample(..., index_digits=5)` retains five digits as the
-API default; the CLI passes the computed width to both plotters. No frequency
-is included in a sample filename. Plotting reuses the fitted data and does not
-reload or refit the waveforms.
-
-## Sample VEA sine fitting
-
-Normal `vea` execution now runs static fitting and then VEA fitting for each
-successful selected point. The command and selection options are unchanged.
-`--dry-run` still stops after calibration preparation.
-
-`vea_fit_results.csv` is written via pandas with one row per original point and
-nominal sweep frequency. Columns include point index, XY, frequency/index,
-static/VEA/channel status, failure reason, and each channel's amplitude (m), fitted
-frequency (Hz), phase (rad), DC (m), and residual norm (m). Channels are deflection,
-indentation and position_z. Rows retain acquisition order, then sweep order.
-
-Deflection receives resolved sensitivity and the static linear baseline
-correction; indentation is `-(Z + corrected_deflection) - contact_point`.
-Position Z retains its calibrated waveform. Fits use `FixedDriftSine`, normalized
-residuals/Jacobians and the central 40%, with the same phase convention as
-calibration. Phase is unwrapped within consecutive successful frequency fits;
-an error resets unwrapping for that channel. Point-local raw slices prevent
-loading the entire sample waveform. Sweep boundaries retain the calibration's
-legacy metadata convention.
-
-Unselected rows have zero results and `unprocessed`. Static failures produce NaN
-and `skipped_static_failed`. A failed frequency/channel records NaN and a reason;
-successful channels and later frequencies are preserved. `run.json` records both
-static and dynamic status. No fully successful frequency row returns exit code 1;
-mixed success records `partial_failure`. Reference-channel fitting is not included.
-
-## Elastic modulus tables
-
-Normal `vea` execution also writes `vea_results.csv`: one row per original point
-and frequency containing the fit diagnostics, static Young's modulus/contact data,
-`storage_modulus_pa`, `loss_modulus_pa`, `loss_tangent`, `modulus_status` and
-`modulus_failure_reason`. `static_results.csv` remains one row per point;
-`vea_fit_results.csv` retains the intermediate sine fits. All CSV files are
-written through pandas without its index; failed values use `NaN`, while
-unselected results remain zero with `unprocessed` status.
-
-`--excitation auto|Piezo|CleanDrive` defaults to auto. Auto follows the legacy
-sample sweep `output_id` rule (1 means CleanDrive; otherwise Piezo).
-`--no-correct-drag` disables the default Piezo drag correction. Config keys are
-`excitation` and `correct_drag`, overridden by CLI values. CleanDrive uses the
-calibration/sample deflection ratio, without applying Piezo drag correction.
-
-For Hertz, with fitted complex deflection D, indentation I and sample indentation
-DC d, `B=(1-nu)*k/(4*sqrt(R)*sqrt(d))`. Piezo uses
-`Q=Ds/Is-Dr/Ir` (omit the last term when drag correction is disabled); CleanDrive
-uses `Q=Dr/Ds-1`. `E*=2*(1+nu)*B*Q`. Real/imaginary parts give storage/loss modulus;
-their ratio gives loss tangent. These are the recorded legacy equations.
-Nonpositive indentation DC and negligible denominators fail explicitly. The
-relative denominator guard is 1e-12 of the corresponding response amplitude
-scale. Undefined tangent preserves finite storage/loss values but records partial
-failure. No reference-channel phase correction is applied (`use_reference=false`).
-
-Representative point 0 at 500 Hz (CleanDrive): storage approximately 4.151 MPa,
-loss 0.231 MPa, tan(delta) 0.05566. These do not pass the 1% comparison with legacy
-CSV values (1.443 MPa / 0.08061 MPa). Static contact and preprocessing changes
-affect these results; the discrepancy remains unresolved. Independent tests recover
-known complex moduli for both excitation formulas.
-
-Calibration waveform plots can be saved during dry-run:
-
-```powershell
-python main.py vea --sample test-data-large/VEA-500-5k-sample.nhf --calibration test-data-large/VEA-500-5k-calibration.nhf --max_count 4 --dry-run --plot-calibration --output results
-```
-
-All frequencies are stacked vertically in sweep order in one PNG:
-`results/<unique-run>/calibration/calibration_deflection.png`. Each subplot is
-labeled with its frequency; the filename contains no frequency. The plot overlays calibrated deflection
-(nm) against time from segment start (ms) with the existing sine fit, and shades
-the central 40% fitting interval. Plotting does not refit or open a GUI window.
-Without `--plot-calibration`, no plots are created. `--output` overrides config
-`output`; the default is `results`. Each run gets a new directory.
-
-Use `--log-level DEBUG` (alias `--log_level`) before or after the command name.
-Levels are `DEBUG`, `INFO` (default), `WARNING`, `ERROR`, and `CRITICAL`;
-lowercase names are also accepted. DEBUG logs show the effective VEA `crop_area`
-and `max_count` after config/CLI resolution. Each unspecified value is shown as `ALL`.
-
-```powershell
-python main.py vea --sample test-data-large/VEA-500-5k-sample.nhf --dry-run --log-level DEBUG
-```
-# TOMLによるVEA解析設定
-
-通常のVEA解析ではCSVと同じ出力ディレクトリに `<sample名>_VEAnalysis.gwy` を自動保存します。
-追加のオプションは不要です（`--dry-run` では保存しません）。
-静的結果5チャンネル（接触位置、ヤング率、DMT Gamma、snap-in力、付着力）と、
-周波数ごとの貯蔵弾性率・損失弾性率・tan δを保存します。5周波数なら合計20チャンネルです。
-単位はそれぞれ m、Pa、N/m、N、N、Pa、Pa、無次元です。
-CSVと同じ値を使用し、未処理点は0、失敗値はNaNとGWYマスクで保持します。
-cropや点数制限を指定しても元のマップサイズを維持します。詳細な状態と失敗理由はCSVを参照してください。
-NHFのX/Y範囲とscanner offsetを同名のGWY軸に設定し、蛇行走査をXY座標へ復元して
-上下反転したラスタを保存します。軸の入れ替えは行いません。
-scanner rotationはメタデータに記録し、画像の回転・補間は行いません。
-
-VEAのcalibrationはdeflection波形から周波数を推定し、NHF設定から生成した周波数との
-相対誤差 `abs(f_fit - f_NHF) / f_NHF` が5%を超えるとエラーで停止します。
-推定時の探索範囲は設定周波数の0.5〜1.5倍で、推定周波数・誤差をINFOログに出力します。
-検証後のcalibration全チャンネルとsampleはNHF周波数を固定して再フィットします。
-ドリフトは0、残差は正規化し、固定周波数のsin・cos・DC係数を線形最小二乗で求めます。
-この検証とcalibrationの固定周波数フィットは `--dry-run` でも実行します。
-CSVの `*_fitted_frequency_hz` は最終フィットに使用したNHF周波数になります。
-
-設定例は [`examples/vea.toml`](examples/vea.toml) を参照してください。
-入力ファイルのパスを編集し、次のコマンドで解析からCSV・PNG出力まで実行できます。
+設定例の [examples/vea.toml](examples/vea.toml) に入力パスや解析条件を設定して実行します。
+この例では先頭4点を解析し、校正・試料のPNGも保存します。
 
 ```powershell
 python main.py --config examples/vea.toml
 ```
 
-サブコマンドを省略するとTOML内の `command`（`vea` または `excitation-fit`）を使用します。
-従来の `python main.py vea --config ...` も利用できますが、明示したコマンドと設定ファイルの `command` は一致する必要があります。
-`excitation-fit` のTOMLは `schema_version = 1`、`command = "excitation-fit"` と、
-`[cli]` 内の `input`・`output`・任意の `log_level` で指定できます。
+CLI引数だけでも実行できます。
 
-TOMLは `schema_version = 1` と `command = "vea"` を必須とし、以下のテーブルを使用します。
+```powershell
+python main.py vea --sample test-data-large/VEA-500-5k-sample.nhf --calibration test-data-large/VEA-500-5k-calibration.nhf --max-count 4 --output results
+```
 
-| テーブル | 設定 |
+通常の `vea` は、校正点0の処理、試料の静的解析、周波数ごとの正弦波フィット、粘弾性計算、結果出力を順に実行します。
+`--max-count` と `--crop-area` を省略すると全点を解析します。
+
+実行前に校正と対象点だけを確認する場合:
+
+```powershell
+python main.py vea --sample test-data-large/VEA-500-5k-sample.nhf --calibration test-data-large/VEA-500-5k-calibration.nhf --max-count 4 --crop-area "0,0:1,1" --dry-run --plot-calibration
+```
+
+`--dry-run` は試料のメタデータ、プローブ定数、校正波形のフィット・周波数検証まで実行します。
+試料波形の読み込み・解析、CSV・GWY・`run.json` の保存は行いません。
+`--plot-calibration` を併用すると校正PNGを保存します。指定しなければ結果ディレクトリは作成しません。
+校正キャッシュはdry-runでも更新されます。
+
+## 設定ファイルと優先順位
+
+TOMLとJSONに対応します。`schema_version = 1` と `command = "vea"` または `"excitation-fit"` が必須です。
+`--config` のみで起動するとファイル内の `command` が選択されます。
+サブコマンドを明示する場合は、ファイル内の指定と一致させてください。
+
+VEA用TOMLのテーブル:
+
+| テーブル | 設定キー |
 |---|---|
 | `[cli]` | `sample`, `calibration`, `output`, `max_count`, `crop_area`, `log_level`, `dry_run`, `plot_calibration`, `plot_sample`, `max_plot_sample`, `excitation`, `correct_drag` |
-| `[probe]` | `tip_radius`（m）, `cone_half_angle`（度）, `poisson_ratio`, `sensitivity`（m/V）, `spring_constant`（N/m） |
-| `[static]` | `fit_direction`（advance/retract）, `model`（Hertz/Sneddon/Pyramid/DMT_Sphere/DMT_Cone）, `baseline_start`, `baseline_end` |
+| `[probe]` | `tip_radius`, `cone_half_angle`, `poisson_ratio`, `sensitivity`, `spring_constant` |
+| `[static]` | `fit_direction`, `model`, `baseline_start`, `baseline_end` |
 
 優先順位は **明示したCLI引数 → 設定ファイル → 既定値** です。
-感度・ばね定数が未指定なら従来どおりNHFのメタデータから取得します。
-calibrationが未指定なら従来の `.last_calibration.nhf` を使用します。
-TOML内の相対パスはTOMLファイルのあるディレクトリが基準です。
-Windowsパスには `/` またはTOMLのシングルクォート文字列を使用してください。
-未指定の `max_count` / `crop_area` は全点対象です。出力先には実行ごとのサブディレクトリを作成します。
+感度・ばね定数については、未指定時にNHFメタデータを使用します。
+不明なキー、設定の重複、型や選択肢の誤りはエラーになります。
+旧名 `max_points` も使用できますが、`max_count` と同時には指定できません。
+JSONではトップレベルに各設定キーを置く従来形式も使用できます。
 
-CLIで一部だけ上書きする例：
+相対パスの基準は次のとおりです。
+
+| 指定方法 | 基準ディレクトリ |
+|---|---|
+| TOML内のパス | TOMLファイルのあるディレクトリ |
+| CLI引数・JSON内のパス | コマンドの実行ディレクトリ |
+
+Windowsパスには `/`、またはTOMLのシングルクォート文字列を使用できます。
+設定を上書きする例:
 
 ```powershell
 python main.py --config examples/vea.toml --model DMT_sphere --fit-direction retract --max-count 4 --log-level DEBUG
 python main.py --config examples/vea.toml --no-plot-sample --no-plot-calibration
 ```
 
-従来のJSON設定も使用できます（JSONの相対パスは従来どおり作業ディレクトリ基準）。
-不明なキー、設定の重複、型や選択肢の誤りは解析前にエラーになります。
+結果ディレクトリを作成する実行では、指定した元の設定ファイルを `input_config.toml` または `input_config.json` としてコピーします。
+このコピーはCLIで上書きした後の設定ではありません。通常解析の採用条件は `run.json` も参照してください。
+
+## 主なVEAオプション
+
+| オプション | 内容・既定値 |
+|---|---|
+| `--sample` | 試料NHF。CLIまたは設定ファイルで必須 |
+| `--calibration` | 校正NHF。未指定なら前回のキャッシュ |
+| `--output` | 出力先の親ディレクトリ。既定値 `results` |
+| `--max-count` | crop後に解析を試みる点数の上限。正の整数、未指定は全点 |
+| `--crop-area` | `"x_start,y_start:x_end,y_end"`。左下原点、0始まり、両端を含む |
+| `--model` | `Hertz`（既定）、`Sneddon`, `Pyramid`, `DMT_Sphere`, `DMT_Cone` |
+| `--fit-direction` | `Advance`（既定）または `Retract` |
+| `--tip-radius` | 先端半径、既定値 `5e-9` m |
+| `--cone-half-angle` | 円錐・角錐の半角、既定値15度。0より大きく90未満 |
+| `--poisson-ratio` | ポアソン比、既定値0.5。範囲は `-1 < ν <= 0.5` |
+| `--baseline-start` / `--baseline-end` | Advanceデータに対するベースライン区間比率。既定値0.05 / 0.50 |
+| `--sensitivity` | 感度、m/V。正の有限値 |
+| `--spring-constant` | ばね定数、N/m。正の有限値 |
+| `--excitation` | `auto`（既定）、`Piezo`, `CleanDrive` |
+| `--no-correct-drag` | 既定で有効なPiezoのドラッグ補正を無効化 |
+| `--plot-calibration` | 校正の正弦波フィットPNGを保存。既定は無効 |
+| `--plot-sample` | 試料の静的・動的フィットPNGを保存。既定は無効 |
+| `--max-plot-sample` | 試料PNGの点数上限。未指定は対象成功点すべて、0は保存なし |
+| `--dry-run` | 校正と対象点の確認まで。既定は無効 |
+| `--log-level` | `DEBUG`, `INFO`（既定）, `WARNING`, `ERROR`, `CRITICAL` |
+
+モデル名・解析方向・ログレベルは大文字小文字を区別しません。
+`--max_count`, `--max_points`, `--max-points` は `--max-count` の別名です。
+`--crop_area`, `--spring_constant`, `--log_level` などの別名も使用できます。全指定は `vea --help` を参照してください。
+ログレベルはサブコマンドの前後どちらでも指定できます。
+
+cropを先に適用し、その後に元の取得順で点数制限を適用します。
+出力のマップサイズはcropや点数制限で縮小せず、元の寸法を保持します。
+現在のマップ選択は左下からの蛇行走査に対応します。範囲外・逆転したcropはエラーです。
+
+## 校正と解析仕様
+
+### 校正ファイルとプローブ定数
+
+`--calibration` または設定ファイルの校正パスを指定した場合、メタデータ検証後にNHF本体を
+ルートの `.last_calibration.nhf` へコピーします。未指定時は実行ディレクトリに関係なく、このキャッシュを使用します。
+明示した入力に問題がある場合、キャッシュへフォールバックせずエラーになります。
+キャッシュ更新は原子的に行い、コピー失敗時は以前のキャッシュを保持します。
+更新は波形フィット前なので、その後に周波数検証が失敗する場合もあります。
+
+感度とばね定数はそれぞれ独立に **CLI → 設定ファイル → 試料NHF → 校正NHF** の順に解決し、値・単位・出典を記録します。
+変位・力として保存されたdeflectionは元の校正値で検出器電圧に戻し、採用した感度で変位に再換算します。
+力はその変位と採用したばね定数から算出します。
+
+校正は最初のmeasurementの点0を使用します。試料と校正のスイープ条件が一致しない場合は停止します。
+
+### 静的解析
+
+Advanceの指定比率区間でZに対する線形ベースラインを求め、AdvanceとRetractの両方から差し引きます。
+選択した方向の力・押込み量から、ヤング率と接触位置を推定します。内部単位はN・m・Paです。
+
+5種類の接触モデルは [nanomech/nm_models.py](nanomech/nm_models.py) に実装され、解析ヤコビアン、
+パラメータスケーリング、残差の正規化を使用します。
+非付着モデルは正の力を持つデータを使用します。DMTモデルは全曲線の残差と複数の接触位置初期値を使用し、
+付着パラメータ `adhesion_parameter_n_per_m` も推定します。非付着モデルではこの値は0です。
+
+### 正弦波フィットと周波数検証
+
+各周波数区間の中央40%を使用し、ドリフトを0に固定します。
+位相は旧実装の `sin(2*pi*f*t + phase - 1)` の規約を保持し、周波数方向にunwrapします。
+
+校正deflectionから周波数を推定し、NHF設定値との相対誤差が5%を超えると停止します。
+推定時の探索範囲は設定周波数の0.5〜1.5倍です。推定値と誤差はINFOログに出力します。
+検証後の校正全チャンネルと試料は、NHF周波数を固定し、正規化したsin・cos・DCの線形最小二乗でフィットします。
+CSVの `*_fitted_frequency_hz` は最終フィットに使ったNHF周波数です。
+
+対象チャンネルはdeflection、indentation、position_zです。
+試料deflectionには感度と静的ベースライン補正を適用し、indentationは `-(Z + corrected_deflection) - contact_point` です。
+試料波形は点ごとの範囲を読み込みます。静的解析に失敗した点は動的解析をスキップします。
+周波数・チャンネル単位のフィット失敗を記録し、後続の処理は継続します。位相unwrapは失敗区間でリセットします。
+
+### 粘弾性計算
+
+`auto` は試料のスイープ設定 `output_id` が1ならCleanDrive、それ以外はPiezoを選択します。
+Piezoは試料のdeflection/indentation応答比から校正の応答比を差し引きます。
+`--no-correct-drag` で校正項を省略できます。CleanDriveは校正/試料のdeflection比から1を引き、Piezoのドラッグ補正は適用しません。
+
+Hertzでは、複素deflectionをD、複素indentationをI、試料のindentation DCをdとすると、
+`B = (1-ν)*k / (4*sqrt(R)*sqrt(d))`、`E* = 2*(1+ν)*B*Q` です。
+QはPiezoで `Ds/Is - Dr/Ir`、CleanDriveで `Dr/Ds - 1` です（s:試料、r:校正）。
+選択モデルにより球・円錐・角錐の形状係数を使用します。
+実部・虚部を貯蔵弾性率・損失弾性率とし、その比を損失正接とします。
+押込みDCが非正、分母が数値的に無視できる場合などは失敗として記録します。
+参照チャンネルによる位相補正は未実装です（`use_reference=false`）。
+
+## 出力ファイル
+
+出力先には実行ごとにUTC日時とUUIDによるディレクトリを作成します。
+通常VEA解析の出力は次のとおりです。
+
+| ファイル | 内容 |
+|---|---|
+| `static_results.csv` | 元の各点につき1行。ヤング率、接触位置、DMT Gamma、snap-in力、付着力、ベースライン、状態・失敗理由 |
+| `vea_fit_results.csv` | 元の各点×周波数につき1行。3チャンネルの振幅・周波数・位相・DC・残差と状態 |
+| `vea_results.csv` | 動的フィット結果に静的結果、貯蔵・損失弾性率、損失正接、計算状態を追加 |
+| `<sample名>_VEAnalysis.gwy` | CSVと同じ解析値の空間マップ。通常解析で自動保存 |
+| `run.json` | 入力、校正元、採用条件、プローブ出典、選択点数、各解析段階の状態 |
+| `input_config.toml` / `input_config.json` | 設定ファイルを指定した場合の原本コピー |
+| `calibration/calibration_deflection.png` | `--plot-calibration` 指定時。全周波数を縦に並べた校正波形とフィット |
+| `sample/sample_point<index>_<model>_<segment>.png` | `--plot-sample` 指定時の試料フィット図 |
+
+CSVは元の取得順、動的テーブルは取得順・スイープ順で出力します。
+未選択点は数値0・`unprocessed`、失敗した解析値は`NaN`と状態・失敗理由を保持します。
+段階によって `failed`、`skipped_static_failed`、`skipped_fit_failed` などを記録します。
+
+GWYは静的5チャンネルと周波数ごとの貯蔵弾性率・損失弾性率・損失正接を保存し、5周波数なら合計20チャンネルです。
+未処理点は0、非有限値はNaNとマスクで保持します。
+NHFのX/Y範囲とscanner offsetを同名の軸に設定し、蛇行走査をXYへ復元してY方向を反転したラスタを保存します。
+軸交換は行いません。scanner rotationはメタデータに保存し、回転・補間は行いません。
+
+試料の静的PNGは選択モデルの力–押込み曲線を、動的PNGは全周波数のdeflection–時間フィットを縦に並べます。
+名前の例は `sample_point00000_Hertz_advance.png` と `sample_point00000_sine_VEA.png` です。
+indexの桁数は元の総点数の桁数に合わせます。
+`--max-plot-sample` は静的・動的PNGにそれぞれ独立に適用し、解析点数やCSVには影響しません。
+この上限だけを指定しても描画は有効になりません。描画時の波形再読み込み・再フィットは行いません。
+
+最終粘弾性計算の状態が `failed` なら終了コード1、`success` または `partial_failure` なら0です。
+入力・校正などの処理エラーは1、argparseの引数構文エラーは2になります。
+部分成功でも0になるため、自動処理では終了コードだけでなく `run.json` とCSVの状態列も確認してください。
+準備や出力の途中で失敗した場合、すべての成果物が揃うとは限りません。
+
+## 励振補正係数の計算
+
+```powershell
+python main.py excitation-fit --input test-data-large/VEA-power-corr.nhf --output results
+```
+
+最初のmeasurementの点0を用い、周波数ごとの振幅を最大振幅で正規化して5次多項式にフィットします。
+式は `amplitude / max(amplitude) = sum(ci * log10(frequency_Hz)**i)`、係数はc0〜c5です。
+少なくとも6組の周波数・振幅と、ランク6の設計行列が必要です。
+出力は `excitation_coefficients.json` と、単位・校正スケール・フィット診断値を含む `run.json` です。
+
+TOML設定例:
+
+```toml
+schema_version = 1
+command = "excitation-fit"
+
+[cli]
+input = "../test-data-large/VEA-power-corr.nhf"
+output = "../results"
+log_level = "INFO"
+```
+
+この相対パス例は `examples/` に置く場合の指定です。
+励振係数計算の復調は旧実装互換の方式を保持し、VEAの5%周波数検証・固定周波数フィットとは別です。
+生成した係数JSONを `vea` が自動で読み込む機能はありません。
+
+## コードとテストデータの配置
+
+```text
+main.py                  CLIの起動入口
+nanomech/
+  cli.py                 引数解析とコマンド選択
+  config.py              TOML/JSON検証と設定コピー
+  vea_command.py         VEA解析の実行・出力
+  workflows.py           励振係数計算の入出力
+  calibration.py         校正ファイルとキャッシュ
+  preparation.py         プローブ定数・校正フィット
+  selection.py           点選択
+  static.py              静的解析
+  dynamic.py             試料の正弦波フィット
+  excitation.py          正弦波・励振係数フィット
+  moduli.py              粘弾性計算
+  calibration_plot.py    校正PNG
+  sample_plot.py         試料PNG
+  gwyddion.py            解析結果のGWYマップ化
+  nm_io.py               NHF読み込み・データ構造
+  nm_models.py           接触・正弦波などのモデル
+  nm_gwy.py              マップ格納
+  gwy_export.py          GWY書き出し
+  logging_config.py      ログ設定
+examples/                設定例
+tests/                  テストと小型データ（tests/data/）
+test-data-large/         大型NHF（Git管理対象外）
+results/                 解析出力
+```
+
+以前ルートにあった4モジュールは `nanomech/` に移動しました。
+外部コードから利用する場合も `from nanomech.nm_io import load_nhf_file` のようにimportしてください。
+
+大型データはローカルに別途配置します。
+
+| ファイル | 用途 |
+|---|---|
+| `test-data-large/Forcemap-50x50.nhf` | 50×50点のマップ読み込み・座標変換などのI/Oテスト |
+| `test-data-large/VEA-500-5k-sample.nhf` | VEA試料解析例・実データテスト |
+| `test-data-large/VEA-500-5k-calibration.nhf` | VEA校正 |
+| `test-data-large/VEA-power-corr.nhf` | 励振係数計算 |
+
+`tests/test_nm_io.py` の8件は `test-data-large/Forcemap-50x50.nhf` を参照します。
+単一点ファイル `tests/data/ForceCurve-single.nhf` は引き続き使用します。
+Forcemapがない場合、この8件は失敗します。ほかの実データテストには入力欠如時にskipするものもあります。
+
+```powershell
+conda run --no-capture-output -n nanosurf python -m pytest -q
+conda run --no-capture-output -n nanosurf python -m pytest tests/test_nm_io.py -q
+```
+
+## 検証上の制限
+
+旧実装との1%以内の数値一致は、まだ確認できていません。
+過去の比較では静的ヤング率と動的弾性率に差があり、単位スケーリング、接触位置、前処理などの違いが検討事項でした。
+その比較値は現在の固定周波数フィットで再検証した基準値ではありません。
+合成データによるモデル回復テストと、旧実装との一致確認は区別してください。
+DMT_Coneの付着パラメータは実装上N/mですが、物理的な解釈の確定を意味しません。
+
+設計経緯は [docs/analysis-specification.md](docs/analysis-specification.md) を参照してください。
+同文書には開発途中の履歴が含まれるため、現在のCLI操作は本READMEと `--help` を参照してください。
