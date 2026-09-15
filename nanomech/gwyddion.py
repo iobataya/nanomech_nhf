@@ -28,18 +28,34 @@ def export_gwyddion(path, sample, selection, static, dynamic, frequencies, metad
     size = GwySizeInfo(float(ranges[0]), float(ranges[1]), float(offsets[0]), float(offsets[1]))
     container = NmGwyContainer(5+3*len(frequencies),selection.height,selection.width,size)
     labels, units = [], []
-    def fill(channel, rows, column):
-        for row in rows.itertuples():
-            x,y = selection.xy(int(row.point_index))
-            # CSV uses bottom-left coordinates; GWY raster starts at the top row.
-            container.set_result(channel,selection.height-1-y,x,getattr(row,column))
+    def coordinates(rows):
+        indices = rows.point_index.to_numpy(dtype=np.intp)
+        if np.any(indices < 0) or np.any(indices >= selection.total_count):
+            raise ValueError("Point index is outside the map")
+        y, column = np.divmod(indices, selection.width)
+        x = np.where(y % 2 == 0, column, selection.width - 1 - column)
+        # CSV uses bottom-left coordinates; GWY raster starts at the top row.
+        return selection.height - 1 - y, x
+
+    # Explicitly retain the old loop's last-row-wins behavior for duplicates.
+    static = static.drop_duplicates("point_index", keep="last")
+    static_y, static_x = coordinates(static)
     for channel,(column,label,unit) in enumerate(STATIC):
-        fill(channel,static,column)
+        container.map[channel, static_y, static_x] = static[column].to_numpy(dtype=float)
         labels.append(label)
         units.append(unit)
+
+    dynamic = dynamic.loc[dynamic.frequency_index.isin(range(len(frequencies)))]
+    dynamic = dynamic.drop_duplicates(["point_index", "frequency_index"], keep="last")
+    dynamic_y, dynamic_x = coordinates(dynamic)
+    frequency_indices = dynamic.frequency_index.to_numpy()
+    values = dynamic[[column for column, _, _ in DYNAMIC]].to_numpy(dtype=float)
+    for j in range(len(frequencies)):
+        selected = frequency_indices == j
+        channels = 5 + np.arange(len(DYNAMIC)) * len(frequencies) + j
+        container.map[channels[:, None], dynamic_y[selected], dynamic_x[selected]] = values[selected].T
     for kind,(column,label,unit) in enumerate(DYNAMIC):
         for j,frequency in enumerate(frequencies):
-            fill(5+kind*len(frequencies)+j,dynamic[dynamic.frequency_index==j],column)
             labels.append(f"{label} {frequency:.12g} Hz")
             units.append(unit)
     meta = {"analysis":json.dumps(metadata,ensure_ascii=False,allow_nan=False),

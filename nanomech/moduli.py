@@ -2,6 +2,7 @@
 import json
 import logging
 import numpy as np
+import pandas as pd
 
 from nanomech.nm_io import load_nhf_file, Segment, Attribute
 from nanomech.nm_models import canonical_contact_model
@@ -85,29 +86,31 @@ def calculate_moduli(dynamic_table, static_table, preparation, config, *, excita
     if excitation not in ("Piezo","CleanDrive"):
         raise ValueError("Unsupported excitation method")
     config.validate()
-    table = dynamic_table.copy()
+    # pandas 3 guarantees copy-on-write: shared input columns detach on edits.
+    # Older supported versions need a deep copy to preserve input isolation.
+    table = dynamic_table.copy(deep=int(pd.__version__.split(".", 1)[0]) < 3)
     table["model"] = canonical_contact_model(config.model)
+    static_by_point = static_table.set_index("point_index")
     if "adhesion_parameter_n_per_m" in static_table:
-        table["adhesion_parameter_n_per_m"] = table.point_index.map(static_table.set_index("point_index").adhesion_parameter_n_per_m)
+        table["adhesion_parameter_n_per_m"] = table.point_index.map(static_by_point.adhesion_parameter_n_per_m)
     for name in ("young_modulus_pa","contact_point_m","snap_in_force_n","adhesion_force_n"):
-        table[name] = table.point_index.map(static_table.set_index("point_index")[name])
-    for name in MODULUS_COLUMNS:
-        table[name] = 0.
-    table["modulus_status"] = "unprocessed"
-    table["modulus_failure_reason"] = ""
-    table["excitation_method"] = excitation
-    table["drag_correction_applied"] = excitation == "Piezo" and correct_drag
+        table[name] = table.point_index.map(static_by_point[name])
+    # Accumulate by row position, then assign entire columns once. This also
+    # preserves independent rows when the caller supplies duplicate index labels.
+    moduli = np.zeros((len(table), len(MODULUS_COLUMNS)))
+    statuses = np.full(len(table), "unprocessed", dtype=object)
+    reasons = np.full(len(table), "", dtype=object)
     def complex_fit(fit):
         return fit.amplitude*np.exp(1j*fit.phase_rad)
     reference_d = [complex_fit(fit) for fit in preparation.fits["deflection"]]
     reference_i = [complex_fit(fit) for fit in preparation.fits["indentation"]]
-    for row in _progress_rows(table, progress_callback):
+    for position, row in enumerate(_progress_rows(table, progress_callback)):
         if row.vea_status == "unprocessed":
             continue
         if row.vea_status != "success":
-            table.loc[row.Index,list(MODULUS_COLUMNS)] = np.nan
-            table.at[row.Index,"modulus_status"] = "skipped_fit_failed"
-            table.at[row.Index,"modulus_failure_reason"] = row.failure_reason
+            moduli[position] = np.nan
+            statuses[position] = "skipped_fit_failed"
+            reasons[position] = row.failure_reason
             continue
         try:
             j = int(row.frequency_index)
@@ -119,16 +122,22 @@ def calculate_moduli(dynamic_table, static_table, preparation, config, *, excita
                 row.indentation_dc_m,preparation.probe["spring_constant"].value,
                 config.tip_radius,config.poisson_ratio,excitation=excitation,correct_drag=correct_drag,
                 model=config.model,cone_half_angle=config.cone_half_angle)
-            table.loc[row.Index,list(MODULUS_COLUMNS)] = [storage,loss,tangent]
-            table.at[row.Index,"modulus_status"] = "partial_failure" if reason else "success"
-            table.at[row.Index,"modulus_failure_reason"] = reason
+            moduli[position] = storage,loss,tangent
+            statuses[position] = "partial_failure" if reason else "success"
+            reasons[position] = reason
             logger.info("Moduli point=%d frequency=%.12g Hz: storage=%.12g Pa loss=%.12g Pa tan_delta=%.12g",
                         row.point_index,row.frequency_hz,storage,loss,tangent)
         except (ValueError,IndexError,ZeroDivisionError,FloatingPointError) as error:
-            table.loc[row.Index,list(MODULUS_COLUMNS)] = np.nan
-            table.at[row.Index,"modulus_status"] = "failed"
-            table.at[row.Index,"modulus_failure_reason"] = str(error)
+            moduli[position] = np.nan
+            statuses[position] = "failed"
+            reasons[position] = str(error)
             logger.warning("Moduli point=%d frequency=%.12g Hz failed: %s",row.point_index,row.frequency_hz,error)
+    for column, name in enumerate(MODULUS_COLUMNS):
+        table[name] = moduli[:, column]
+    table["modulus_status"] = statuses
+    table["modulus_failure_reason"] = reasons
+    table["excitation_method"] = excitation
+    table["drag_correction_applied"] = excitation == "Piezo" and correct_drag
     active = table[table.modulus_status != "unprocessed"].modulus_status
     valid = active.isin(("success","partial_failure"))
     status = "failed" if not valid.any() else "success" if (active == "success").all() else "partial_failure"

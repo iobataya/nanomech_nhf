@@ -43,7 +43,8 @@ def test_zero_storage_preserves_moduli():
     assert np.isnan(tangent) and reason
 
 
-def test_table_preserves_unprocessed_and_failed():
+@pytest.mark.parametrize("duplicate_index", [False, True])
+def test_table_preserves_unprocessed_and_failed(duplicate_index):
     frame = pd.DataFrame(dict(point_index=[0,1,2],frequency_index=[0]*3,frequency_hz=[500.]*3,
         vea_status=["success","unprocessed","failed"],failure_reason=["","","bad fit"],
         deflection_amplitude_m=[2e-9,0,np.nan],deflection_phase_rad=[.3,0,np.nan],
@@ -55,6 +56,9 @@ def test_table_preserves_unprocessed_and_failed():
                             probe={"spring_constant":ProbeValue(.08,"N/m","test")})
     # Interleave two frequency rows per point; count points only after both rows.
     frame = pd.concat([frame, frame], ignore_index=True)
+    if duplicate_index:
+        frame.index = [7, 7, 3, 3, 9, 9]
+    original = frame.copy(deep=True)
     updates = []
     result,status = calculate_moduli(frame,static,prep,StaticConfig(),
                                     progress_callback=lambda done, total: updates.append((done, total)))
@@ -65,3 +69,10 @@ def test_table_preserves_unprocessed_and_failed():
     assert np.isnan(result.storage_modulus_pa.iloc[2])
     assert result.young_modulus_pa.iloc[0] == 1e6
     assert "storage_modulus_pa" not in frame
+    pd.testing.assert_frame_equal(frame, original)
+    assert result.index.equals(frame.index)
+    # Editing either table after return must not affect the other table.
+    result.iloc[0, result.columns.get_loc("frequency_hz")] = 123.
+    assert frame.frequency_hz.iloc[0] == 500.
+    frame.iloc[1, frame.columns.get_loc("frequency_hz")] = 456.
+    assert result.frequency_hz.iloc[1] == 500.

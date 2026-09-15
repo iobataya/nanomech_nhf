@@ -3,75 +3,66 @@
 Nanosurf AFMのNHFファイルから、静的ヤング率と周波数ごとの粘弾性を解析するPython CLIです。
 入力、校正、フィッティング、CSV・Gwyddion・PNG出力までを非対話で実行します。
 
-## 実行環境と起動
+## 環境のインストール
 
-Python 3.12以上が必要です。実行時の依存ライブラリは `nanosurf>=2.0.0`、`matplotlib`、`numpy`、`scipy`、`pandas` です。
-`nanosurf.utils` の配置が1.x系と異なるため、nanosurf 2.0.0以上を使用してください。
-テストには `pytest` と `Pillow` も使用します。
+Python 3.12以上が必要です。以下の手順はWindows PowerShellを例にしています。リポジトリを取得した後、リポジトリのルートディレクトリで実行してください。
 
-以下の例はリポジトリのルートで、必要なライブラリが入ったconda環境 `nanosurf` を使用します。
+### GUIを含むすべての環境
+
+GUIとCLIの両方を使用する場合は、仮想環境を作成してGUIオプション付きでこのプロジェクトをインストールします。
 
 ```powershell
-conda activate nanosurf
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e ".[gui]"
+```
+
+PowerShellでスクリプト実行が制限されている場合は、現在のユーザーだけ一時的に許可してから仮想環境を有効化できます。
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+```
+
+インストール後の起動方法:
+
+```powershell
+python -m nanomech_gui
+# または
+nanomech-gui
+```
+
+### CLIのみの環境
+
+GUIを使用しない場合は、GUI依存のPySide6を含めずにインストールできます。
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
+
+CLIの起動確認:
+
+```powershell
 python main.py --help
 python main.py vea --help
 python main.py excitation-fit --help
 ```
 
-環境を有効化せず実行する場合は、`conda run --no-capture-output -n nanosurf python main.py ...` を使用します。
-Windowsでは環境内の `python.exe` を直接指定するだけでなく、conda経由で環境のDLL検索パスも設定してください。
+`-e` は編集可能インストールです。ソースコードを変更した場合も、同じ仮想環境からそのまま実行できます。
+GUI付きで後からインストールし直す場合は `python -m pip install -e ".[gui]"` を実行してください。
 
-起動入口はルートの `main.py` で、`nanomech.cli.main()` を呼び出します。
-現在、`python -m nanomech` 用の入口や、インストール時の `nanomech` コマンド登録はありません。
+### テスト用の追加パッケージ
 
-## CLI・GUI共通API
+テストを実行する場合は、解析環境を有効化した状態で次を実行します。
 
-`nanomech/requests.py` に解析条件の `VeaRequest`、`ExcitationFitRequest`、
-プローブ定数の `ProbeOverrides` を定義しています。静的解析条件は既存の `StaticConfig` を再利用します。
-CLIは入力をこれらのdataclassに変換し、`nanomech/workflows.py` の
-`run_vea()` / `run_excitation_fit()` で解析・保存を実行します。
-戻り値は `nanomech/results.py` の結果dataclassで、状態・出力先などを保持します。
-終了コードへの変換はCLI側が担当します。
-
-```python
-from pathlib import Path
-from nanomech.requests import VeaRequest
-from nanomech.workflows import run_vea
-
-result = run_vea(VeaRequest(
-    sample=Path("sample.nhf"),
-    calibration=Path("calibration.nhf"),
-    output=Path("results"),
-    max_count=4,
-))
-print(result.status, result.output_dir)
+```powershell
+python -m pip install pytest Pillow
+python -m pytest
 ```
-
-共通APIは同期実行で、例外は呼び出し元に返します。`config_path` は設定の出典記録・
-コピー用であり、API内で設定を読み込む指定ではありません。条件はリクエストに設定してください。
-`probe` は明示指定、`probe_config` は設定ファイル由来の値で、前者を優先します。
-`probe_source` の既定値は `API`、CLIでは `CLI`、GUIでは `GUI` を指定できます。
-dry-runでも校正キャッシュは更新され、校正PNGを指定した場合は出力先が作成されます。
-
-`run_vea(request, progress_callback=callback)` で段階ごとの進捗を取得できます。
-コールバックには `AnalysisProgress(stage, completed, total)` が渡り、`percent` で進捗率を取得できます。
-`total` と `percent` が `None` の段階（保存など）は点数進捗の対象外です。
-点数は失敗・スキップを含む処理済みの選択点数であり、成功点数ではありません。
-通知は解析を実行しているスレッドから同期的に呼ばれます。GUIはQtシグナルで画面に伝達します。
-
-Qt6 GUIの配置先は `nanomech_gui/`、GUI専用テストの配置先は `tests_gui/` です。
-GUIには `VEA` と `excitation-fit` の2つのタブがあります。`excitation-fit` ではNHFファイルを
-選択してフィッティングを開始すると、0～5次の係数をテーブルに表示します。計算はバックグラウンドで
-実行し、エラーはタブ内に表示します。excitation-fitの結果ファイルの保存は行いません。
-`VEA` ではFiles、Analysis Range、プローブ情報、Static、Dynamicの各欄で条件を指定し、
-「フィッティングを開始」または「Dry-Run」を実行できます。VEAの結果は指定した保存先へ出力します。
-タブ上部の「解析設定の読み込み」でTOML／JSONを読み込み、対応するタブの解析条件を更新できます。
-未指定項目は既定値に戻り、読み込みだけでは解析を開始しません。TOMLの相対パスは設定ファイル基準です。
-`pip install -e ".[gui]"` でGUI用の依存を追加し、
-`python -m nanomech_gui` または `nanomech-gui` で起動できます。
-Qt関連コードはGUI側に限定し、CLIのみのインストールにはQtは不要です。
-GUI右上の「Language / 言語」で日本語とEnglishを切り替えられます。
-解析条件・選択ファイル・計算結果を保持したまま、両タブと進捗表示を更新します。
 
 ## VEA解析を実行する
 
@@ -203,7 +194,7 @@ Advanceの指定比率区間でZに対する線形ベースラインを求め、
 ### 正弦波フィットと周波数検証
 
 各周波数区間の中央40%を使用し、ドリフトを0に固定します。
-位相は旧実装の `sin(2*pi*f*t + phase - 1)` の規約を保持し、周波数方向にunwrapします。
+位相は `sin(2*pi*f*t + phase - 1)` の規約で計算し、周波数方向にunwrapします。
 
 校正deflectionから周波数を推定し、NHF設定値との相対誤差が5%を超えると停止します。
 推定時の探索範囲は設定周波数の0.5〜1.5倍です。推定値と誤差はINFOログに出力します。
@@ -292,64 +283,3 @@ log_level = "INFO"
 励振係数計算の復調は旧実装互換の方式を保持し、VEAの5%周波数検証・固定周波数フィットとは別です。
 生成した係数JSONを `vea` が自動で読み込む機能はありません。
 
-## コードとテストデータの配置
-
-```text
-main.py                  CLIの起動入口
-nanomech/
-  cli.py                 引数解析とコマンド選択
-  config.py              TOML/JSON検証と設定コピー
-  vea_command.py         VEA解析の実行・出力
-  workflows.py           励振係数計算の入出力
-  calibration.py         校正ファイルとキャッシュ
-  preparation.py         プローブ定数・校正フィット
-  selection.py           点選択
-  static.py              静的解析
-  dynamic.py             試料の正弦波フィット
-  excitation.py          正弦波・励振係数フィット
-  moduli.py              粘弾性計算
-  calibration_plot.py    校正PNG
-  sample_plot.py         試料PNG
-  gwyddion.py            解析結果のGWYマップ化
-  nm_io.py               NHF読み込み・データ構造
-  nm_models.py           接触・正弦波などのモデル
-  nm_gwy.py              マップ格納
-  gwy_export.py          GWY書き出し
-  logging_config.py      ログ設定
-examples/                設定例
-tests/                  テストと小型データ（tests/data/）
-test-data-large/         大型NHF（Git管理対象外）
-results/                 解析出力
-```
-
-以前ルートにあった4モジュールは `nanomech/` に移動しました。
-外部コードから利用する場合も `from nanomech.nm_io import load_nhf_file` のようにimportしてください。
-
-大型データはローカルに別途配置します。
-
-| ファイル | 用途 |
-|---|---|
-| `test-data-large/Forcemap-50x50.nhf` | 50×50点のマップ読み込み・座標変換などのI/Oテスト |
-| `test-data-large/VEA-500-5k-sample.nhf` | VEA試料解析例・実データテスト |
-| `test-data-large/VEA-500-5k-calibration.nhf` | VEA校正 |
-| `test-data-large/VEA-power-corr.nhf` | 励振係数計算 |
-
-`tests/test_nm_io.py` の8件は `test-data-large/Forcemap-50x50.nhf` を参照します。
-単一点ファイル `tests/data/ForceCurve-single.nhf` は引き続き使用します。
-Forcemapがない場合、この8件は失敗します。ほかの実データテストには入力欠如時にskipするものもあります。
-
-```powershell
-conda run --no-capture-output -n nanosurf python -m pytest -q
-conda run --no-capture-output -n nanosurf python -m pytest tests/test_nm_io.py -q
-```
-
-## 検証上の制限
-
-旧実装との1%以内の数値一致は、まだ確認できていません。
-過去の比較では静的ヤング率と動的弾性率に差があり、単位スケーリング、接触位置、前処理などの違いが検討事項でした。
-その比較値は現在の固定周波数フィットで再検証した基準値ではありません。
-合成データによるモデル回復テストと、旧実装との一致確認は区別してください。
-DMT_Coneの付着パラメータは実装上N/mですが、物理的な解釈の確定を意味しません。
-
-設計経緯は [docs/analysis-specification.md](docs/analysis-specification.md) を参照してください。
-同文書には開発途中の履歴が含まれるため、現在のCLI操作は本READMEと `--help` を参照してください。

@@ -1,0 +1,30 @@
+schema_version = 1
+command = "vea"
+
+[cli]
+# Paths are relative to this TOML file. Windows paths can use forward slashes.
+sample = "../test-data-large/VEA-500-5k-sample.nhf"
+calibration = "../test-data-large/VEA-500-5k-calibration.nhf"
+output = "../results"
+log_level = "INFO"
+max_count = 4
+# crop_area = "0,0:1,1"
+dry_run = false
+plot_calibration = true
+plot_sample = true
+max_plot_sample = 4
+excitation = "auto"
+correct_drag = true
+
+[probe]
+tip_radius = 5e-9          # m
+cone_half_angle = 15.0    # degrees
+poisson_ratio = 0.5
+# sensitivity = 1e-7      # m/V; omitted: use NHF metadata
+# spring_constant = 0.08 # N/m; omitted: use NHF metadata
+
+[static]
+fit_direction = "advance" # advance or retract
+model = "Hertz"           # Hertz, Sneddon, Pyramid, DMT_Sphere, DMT_Cone
+baseline_start = 0.05
+baseline_end = 0.5

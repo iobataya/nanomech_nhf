@@ -1,5 +1,6 @@
 # Ignore large test-data in test-data-large
 test-data-large/
+profiles/
 .last_calibration.nhf
 .last_calibration.*.tmp
 

@@ -472,15 +472,34 @@ class VeaMeasurementData:
 
 # Reads offsets and number of datapoints for File-Loading
 def get_offset_datapoints(segment: NHFSegment, channel: NHFDataset):
+    """Return point boundaries, cached for measurements from load_nhf_file.
+
+    Each segment shares explicit boundary channels. Block-size fallback data
+    are keyed by source ID because channels can have different layouts.
+    Standalone segments retain the uncached behavior. Cached arrays are read-only.
+    """
+    cache = getattr(segment, '_nanomech_offset_cache', None)
+    if cache is not None:
+        if 'shared' in cache:
+            return cache['shared']
+        if 'blocks' in cache:
+            block_size_id = channel.attribute["dataset_block_size_source"]
+            if block_size_id in cache['blocks']:
+                return cache['blocks'][block_size_id]
     offset = None
     datapoints = None
+    block_size_id = None
+    used_blocks = cache is not None and 'blocks' in cache
 
-    try:
-        ch_offset = segment.read_channel('channel_data_offsets')
-        ch_datapoints = segment.read_channel('number_of_datapoints_acquired')
-        offset = ch_offset.dataset
-        datapoints = ch_datapoints.dataset
-    except Exception as e:
+    if not used_blocks:
+        try:
+            ch_offset = segment.read_channel('channel_data_offsets')
+            ch_datapoints = segment.read_channel('number_of_datapoints_acquired')
+            offset = ch_offset.dataset
+            datapoints = ch_datapoints.dataset
+        except Exception:
+            used_blocks = True
+    if used_blocks:
         logger.debug(f"No offset and datapoint channel found in the segment {segment.name}. Falling back to block-size method...")
         try:
             block_size_id = channel.attribute["dataset_block_size_source"]
@@ -498,6 +517,17 @@ def get_offset_datapoints(segment: NHFSegment, channel: NHFDataset):
         logger.error(f"Unable to determine offsets/datapoints for segment {segment.name}")
         raise ValueError(f"Unable to determine offsets/datapoints for segment {segment.name}")
 
+    if cache is not None:
+        # Own the arrays independently of the reader's mutable channel buffers.
+        offset, datapoints = np.array(offset, copy=True), np.array(datapoints, copy=True)
+        offset.setflags(write=False)
+        datapoints.setflags(write=False)
+        result = offset, datapoints
+        if used_blocks:
+            cache.setdefault('blocks', {})[block_size_id] = result
+        else:
+            cache['shared'] = result
+        return result
     return offset, datapoints
 
 def convert_deflection_to_meters(ch_defl: NHFDataset, measurement: NHFMeasurement, deflection_sensitivity: float | None = None, spring_constant: float | None = None):
@@ -575,6 +605,13 @@ def load_nhf_file(source_file: Path) -> NHFMeasurement:
 
     measurement_name = nhf_file.measurement_name(0)
     measurement = nhf_file.measurement[measurement_name]
+
+    # Lifetime is bounded by this loaded measurement, never by a global cache.
+    # Expose each segment's dictionary to existing segment-based read helpers.
+    measurement._nanomech_offset_cache = {}
+    for name, segment in measurement.segment.items():
+        segment._nanomech_offset_cache = {}
+        measurement._nanomech_offset_cache[name] = segment._nanomech_offset_cache
 
     # Log available segments for debugging when files differ between systems
     try:

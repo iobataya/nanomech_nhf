@@ -79,3 +79,54 @@ def test_export_failure_is_error(tmp_path,monkeypatch):
     dynamic=pd.DataFrame({"point_index":[0],"frequency_index":[0],**{key:[0.] for key,_,_ in DYNAMIC}})
     with pytest.raises(OSError,match="Failed to save"):
         export_gwyddion(tmp_path/"failed.gwy","sample.nhf",select_points(1,1),static,dynamic,[100],{})
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_bulk_maps_match_rowwise_placement(tmp_path, monkeypatch, empty):
+    import nanomech.gwyddion as module
+    monkeypatch.setattr(module, "load_nhf_file", lambda _: SimpleNamespace(
+        attribute={"rect_axis_range": [4e-6, 3e-6]}))
+    selection = select_points(4, 3, crop_area="1,0:2,2")
+    # Shuffled sparse rows, repeated indices, missing frequency, NaNs and zeros.
+    static = pd.DataFrame({"point_index": [10, 1, 5, 1], **{
+        key: np.array([7., 2., np.nan, 0.]) + k for k, (key, _, _) in enumerate(STATIC)}})
+    dynamic = pd.DataFrame({"point_index": [5, 1, 10, 1, 5],
+        "frequency_index": [1, 0, 1, 0, 0], **{
+        key: np.array([np.nan, 2., 8., 0., 3.]) + k for k, (key, _, _) in enumerate(DYNAMIC)}})
+    if empty:
+        static, dynamic = static.iloc[:0], dynamic.iloc[:0]
+    expected = np.full((14, 3, 4), np.nan)
+    for channel, (column, _, _) in enumerate(STATIC):
+        for row in static.itertuples():
+            x, y = selection.xy(row.point_index)
+            expected[channel, 2-y, x] = getattr(row, column)
+    for kind, (column, _, _) in enumerate(DYNAMIC):
+        for row in dynamic.itertuples():
+            x, y = selection.xy(row.point_index)
+            expected[5+kind*3+row.frequency_index, 2-y, x] = getattr(row, column)
+    original_static, original_dynamic = static.copy(), dynamic.copy()
+    path = export_gwyddion(tmp_path/"bulk.gwy", "sample.nhf", selection,
+                          static, dynamic, [100, 200, 300], {})
+    content = decode(path.read_bytes())
+    for channel in range(14):
+        np.testing.assert_equal(content[f"/{channel}/data"]["data"], expected[channel].ravel())
+        np.testing.assert_equal(content[f"/{channel}/mask"]["data"], np.isnan(expected[channel]).ravel())
+    assert content["/7/data/title"] == "E Store 300 Hz"
+    assert content["/8/data/title"] == "E Loss 100 Hz"
+    pd.testing.assert_frame_equal(static, original_static)
+    pd.testing.assert_frame_equal(dynamic, original_dynamic)
+
+
+@pytest.mark.parametrize("point_index", [-1, 12])
+@pytest.mark.parametrize("target", ["static", "dynamic"])
+def test_bulk_coordinates_reject_out_of_range(tmp_path, monkeypatch, point_index, target):
+    import nanomech.gwyddion as module
+    monkeypatch.setattr(module, "load_nhf_file", lambda _: SimpleNamespace(
+        attribute={"rect_axis_range": [4e-6, 3e-6]}))
+    static = pd.DataFrame({"point_index": [0], **{key: [0.] for key, _, _ in STATIC}})
+    dynamic = pd.DataFrame({"point_index": [0], "frequency_index": [0],
+                           **{key: [0.] for key, _, _ in DYNAMIC}})
+    (static if target == "static" else dynamic).loc[0, "point_index"] = point_index
+    with pytest.raises(ValueError, match="outside the map"):
+        export_gwyddion(tmp_path/"invalid.gwy", "sample.nhf", select_points(4, 3),
+                       static, dynamic, [100], {})

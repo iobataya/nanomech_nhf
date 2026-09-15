@@ -9,10 +9,15 @@ class PointSelection:
     width: int
     height: int
     point_indices: tuple[int, ...]
+    def __init__(self, width: int, height: int, point_indices: tuple[int, ...]):
+        object.__setattr__(self, "width", width)
+        object.__setattr__(self, "height", height)
+        object.__setattr__(self, "point_indices", point_indices)
+        object.__setattr__(self, "total_count", width * height)
 
-    @property
-    def total_count(self):
-        return self.width * self.height
+#    @property
+#    def total_count(self):
+#        return self.width * self.height
 
     def xy(self, point_index):
         if not isinstance(point_index, Integral) or not 0 <= point_index < self.total_count:
