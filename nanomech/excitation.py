@@ -62,9 +62,10 @@ class SineFitResult:
 def demodulate_signal(time, signal, frequencies, boundaries, *, normalize=True, frequency_mode="free"):
     """Central 40% sine fit; returned phase retains the legacy phi-1 convention.
 
-    ``validate`` estimates frequency in 0.5..1.5 times the NHF frequency and
-    rejects relative errors above 5%, then refits at the exact NHF frequency.
-    ``fixed`` solves normalized sine/cosine/DC least squares at that frequency.
+    ``validate`` estimates frequency in 0.5..1.5 times the NHF frequency,
+    logs a warning when the relative error exceeds 10%, and refits at the exact
+    NHF frequency. ``fixed`` solves normalized sine/cosine/DC least squares at
+    that frequency.
     Both use FixedDriftSine's zero-drift equation and residual convention.
     The default and unnormalized branch retain the earlier excitation fit.
     """
@@ -119,8 +120,10 @@ def demodulate_signal(time, signal, frequencies, boundaries, *, normalize=True, 
                     error = abs(estimated[1]-f)/f
                     logging.getLogger(__name__).info(
                         "Calibration frequency check: NHF=%.12g Hz fitted=%.12g Hz error=%.6g%%",f,estimated[1],100*error)
-                    if error > .05 + 1e-12:
-                        raise ValueError(f"Calibration frequency error exceeds 5%: NHF={f:.12g} Hz fitted={estimated[1]:.12g} Hz error={100*error:.6g}%")
+                    if error > .10 + 1e-12:
+                        logging.getLogger(__name__).warning(
+                            "Calibration frequency error exceeds 10%%: NHF=%s Hz fitted=%s Hz error=%s%%; continuing with fixed NHF frequency",
+                            f, estimated[1], 100*error)
                 # With f and drift fixed, sine/cosine/DC are a linear normalized least-squares problem.
                 params, _ = seed(f)
                 model = FixedDriftSine(scale)

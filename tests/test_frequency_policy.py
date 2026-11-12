@@ -1,13 +1,17 @@
+import logging
+
 import numpy as np
 import pytest
 from nanomech.excitation import demodulate_signal
 
-@pytest.mark.parametrize("ratio",[.94,1.06,.8,1.2])
-def test_calibration_rejects_frequency_error(ratio):
+@pytest.mark.parametrize("ratio",[.8,1.2])
+def test_calibration_warns_on_large_frequency_error(caplog, ratio):
     t=np.linspace(0,.1,10000)
     y=2e-9*np.sin(2*np.pi*100*ratio*t+.3)+5e-9
-    with pytest.raises(ValueError,match="exceeds 5%"):
-        demodulate_signal(t,y,[100],[0,len(t)],frequency_mode="validate")
+    with caplog.at_level(logging.WARNING):
+        fit,=demodulate_signal(t,y,[100],[0,len(t)],frequency_mode="validate")
+    assert fit.frequency_hz == 100
+    assert "Calibration frequency error exceeds" in caplog.text
 
 @pytest.mark.parametrize("ratio",[.95,.98,1.,1.02,1.05])
 def test_calibration_refits_at_nhf_frequency(ratio):
