@@ -134,4 +134,4 @@ dependencies:
       - webcolors==25.10.0
       - webencodings==0.6.1
       - websocket-client==1.9.2
-prefix: C:\Users\IkuoObataya\miniconda3\envs\nanosurf
+prefix: %conda_prefix%\envs\nanosurf

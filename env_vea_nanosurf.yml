@@ -1,3 +1,6 @@
+# This environment does not work because of python=3.14.
+# Current working version uses python=3.12 because of compatibility isseus with NumPy
+
 name: nanosurf
 channels:
   - defaults
@@ -183,4 +186,4 @@ dependencies:
       - webcolors==25.10.0
       - webencodings==0.6.1
       - websocket-client==1.9.2
-prefix: C:\Users\iobataya\miniconda3-pbe\envs\nanosurf
+prefix: %conda_prefix%\envs\nanosurf
