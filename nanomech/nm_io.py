@@ -33,6 +33,7 @@ class Channel:
 class Segment:
     ADVANCE = 'Advance to Setpoint 1'
     WAIT = 'Wait 1'
+    WAIT_2 = 'Wait 2'
     VEA = 'VEA Sweep 1'
     RETRACT = 'Retract 1'
 

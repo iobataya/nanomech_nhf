@@ -19,6 +19,7 @@ requires-python = ">=3.12"
 
 [project.optional-dependencies]
 gui = ["PySide6>=6,<7"]
+test = ["pytest", "Pillow"]
 
 [project.gui-scripts]
 nanomech-gui = "nanomech_gui.app:main"

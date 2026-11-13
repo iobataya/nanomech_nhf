@@ -29,7 +29,7 @@ def test_load_nsf_measurement():
     nsf_measurement = NSF_Measurement(test_file)
     assert nsf_measurement is not None
     assert nsf_measurement.is_nhf
-    logger.info(f"NSF_Measurement loaded from {test_file} with {nsf_measurement.reader.measurement_count} measurements.")
+    logger.info(f"NSF_Measurement loaded from {test_file} (reader type: {type(nsf_measurement.reader)}) with {nsf_measurement.reader.measurement_count()} measurement(s).")
 
 def test_load_nhf_file():
     """Test loading of a .nhf file."""
@@ -38,8 +38,8 @@ def test_load_nhf_file():
     nhf_file = nhf_reader.NHFFileReader(verbose=True)
     assert nhf_file.read(test_file)
 
-    logger.info(str(nhf_file))
-
+    logger.info(f"NHF file loaded from {test_file}")
+    logger.info(f"Reader object type:  {type(nhf_file)}")
 
 def test_load_nhf_forcemapping():
     """Test loading of a .nhf file."""
@@ -79,7 +79,7 @@ def test_load_nhf_single_forcecurve_file():
         show_channel=True,
         show_segment=True,
         show_attribute=True)
-    logger.info(nhf_summary)
+    #logger.info(nhf_summary)
 
     # measurement.segment is a dictionary with keys 'advance' and 'retract'
     assert measurement.segment is not None
@@ -90,37 +90,16 @@ def test_load_nhf_single_forcecurve_file():
     advance_segment = measurement.segment[Segment.ADVANCE]
     x = advance_segment.read_channel(Channel.Z_POSITION)
     y = advance_segment.read_channel(Channel.DEFLECTION)
-    meta = advance_segment.read_channel('Sampler Timestamp')
+    meta = advance_segment.read_channel(Channel.SAMPLER_META)
     time_ch = advance_segment.read_channel(Channel.TIME)
-    
-    #logger.debug(f"x {x.dataset[0:5], x.dataset[-5:]}, y {y.dataset[0:5], y.dataset[-5:]}")
-    # dataset has minimum value of float64 at the end.
-    # where do they start ? 
-    abnormal_elements = np.where(x.dataset<-1e+308)
-    logger.debug(f"min(x,y) = {np.min(x.dataset)}, {np.min(y.dataset)}; max(x,y) = {np.max(x.dataset)}, {np.max(y.dataset)}")
-    logger.debug(f"x from 1560 to 1570 {x.dataset[1560:1571]}")
-    logger.debug(f"time from 1560 to 1570 {time_ch.dataset[1560:1571]}")
-
-    # find unrealistic negative value -1.79769e+308
-    # Reported CSM-726
-    neg_in_x = np.where(x.dataset < -1e+308)[0].min()
-    neg_in_y = np.where(y.dataset < -1e+308)[0].min()
-    neg_in_time = np.where(time_ch.dataset < -1e+308)[0].min()
-    logger.debug(f"neg_in_x = {neg_in_x}, neg_in_y = {neg_in_y}, neg_in_time = {neg_in_time}")
-
-    # Mask the wrong values
-    threshold = -1e+308
-    x.dataset[x.dataset < threshold] = np.nan
-    y.dataset[y.dataset < threshold] = np.nan
-    time_ch.dataset[time_ch.dataset < threshold] = np.nan
 
     name = "test_nhf_forcespec.png"
     fig, ax1 = plt.subplots()
     ax2 = ax1.twinx()
 
     # Plot two parameters against the same x-axis with separate y-axes.
-    p1 = ax1.scatter(x.dataset, y.dataset, s=8, color='blue', label='Deflection')
-    p2 = ax2.scatter(x.dataset, meta.dataset, s=8, color='red', label='Sampler Meta')
+    p1 = ax1.scatter(x.get_masked_dataset(), y.get_masked_dataset(), s=8, color='blue', label='Deflection')
+    p2 = ax2.scatter(x.get_masked_dataset(), meta.get_masked_dataset(), s=8, color='red', label='Sampler Meta')
 
     ax1.set_xlabel('Z Position')
     ax1.set_ylabel('Deflection', color='blue')
@@ -134,11 +113,31 @@ def test_load_nhf_single_forcecurve_file():
     path = os.path.join(OUTPUT_FIGS_DIR, name)
     fig.savefig(path)
     plt.close(fig)
+
+    name = "test_nhf_forcespec_by_time.png"
+    fig, ax1 = plt.subplots()
+    ax2 = ax1.twinx()
+
+    # Plot two parameters against the same x-axis with separate y-axes.
+    p1 = ax1.scatter(time_ch.get_masked_dataset(), y.get_masked_dataset(), s=8, color='blue', label='Deflection')
+    p2 = ax2.scatter(time_ch.get_masked_dataset(), meta.get_masked_dataset(), s=8, color='red', label='Position Z')
+
+    ax1.set_xlabel('Time')
+    ax1.set_ylabel('Deflection', color='blue')
+    ax2.set_ylabel('Position Z', color='red')
+    ax1.tick_params(axis='y', labelcolor='blue')
+    ax2.tick_params(axis='y', labelcolor='red')
+
+    ax1.legend([p1, p2], ['Deflection', 'Position Z'], loc='best')
+    fig.tight_layout()
+
+    path = os.path.join(OUTPUT_FIGS_DIR, name)
+    fig.savefig(path)
+    plt.close(fig)
+
     assert os.path.exists(path)
 
-    # TODO: チャンネルの最後尾にfloatの最小値が入っている。CSM-726で報告済み。
-    #       現状は、各配列内でthreshold未満の値をnp.nanでマスクして対応している。
-    #       matplotlibではnp.nanを無視して描画してくれる。
+    # Note: datasetの末尾にはfloatの最小値が入っている。read_channelで読み込む。
     # Note: XY-coordinateはmeasurementファイルのchannelに入っていない。
     #       measurementのattributesからx-offset, y-offsetとして取得。
 
